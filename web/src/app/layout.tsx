@@ -15,8 +15,6 @@ export default function RootLayout({
       <body
         style={{
           margin: 0,
-          background: '#ffffff',
-          color: '#1a1a1a',
           fontFamily:
             'system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
           height: '100vh',

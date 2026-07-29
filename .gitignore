@@ -7,4 +7,6 @@ web/node_modules/
 web/.next/
 .webbuddy/
 .workbuddy/
+web/tsconfig.tsbuildinfo
+*.tsbuildinfo
 

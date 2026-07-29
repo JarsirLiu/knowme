@@ -1,0 +1,47 @@
+.approval {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.approvalTitle {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.approvalActions {
+  display: flex;
+  gap: 8px;
+}
+
+.approvalApprove {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: #22c55e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.approvalReject {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--bg-primary);
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}

@@ -1,0 +1,180 @@
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--color-bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border-right: 1px solid var(--color-border-soft);
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.brandIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.searchIcon {
+  color: var(--color-muted-soft);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.searchInput::placeholder {
+  color: var(--color-faint);
+}
+
+/* ---------- Menu ---------- */
+
+.menuSection {
+  padding: 4px 8px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.menuItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.menuIcon {
+  flex-shrink: 0;
+}
+
+/* ---------- Section label ---------- */
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 16px 4px;
+}
+
+/* ---------- Projects list ---------- */
+
+.projectsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: inherit;
+}
+
+.taskItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.taskItemActive {
+  background: var(--color-bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.taskItemActive:hover {
+  background: var(--color-bg-hover);
+}
+
+.taskItemText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Bottom ---------- */
+
+.sidebarBottom {
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebarBottomLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.sidebarBottomLink:hover {
+  background: var(--color-bg-hover);
+}
