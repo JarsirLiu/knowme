@@ -1,0 +1,10 @@
+node_modules/
+.env
+*.log
+.next/
+.DS_Store
+web/node_modules/
+web/.next/
+.webbuddy/
+.workbuddy/
+

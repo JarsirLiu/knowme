@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperAgent — 本地 Coding Agent</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --border: #e4e7ec;
+    --text: #1a1f2b; --muted: #6b7280; --accent: #4f6ef7;
+    --user-bubble: #4f6ef7; --tool-bg: #f0f4ff; --mono: "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header .meta { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  header .spacer { flex: 1; }
+  header button { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
+  header button:hover { border-color: var(--accent); color: var(--accent); }
+  #chat { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; max-width: 900px; width: 100%; margin: 0 auto; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--user-bubble); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .tool-chip { align-self: flex-start; background: var(--tool-bg); border: 1px solid #dbe4ff; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-family: var(--mono); color: #3b5bdb; max-width: 85%; overflow: hidden; }
+  .tool-chip .out { color: var(--muted); margin-top: 4px; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto; }
+  .approval { align-self: flex-start; background: #fff8e6; border: 1px solid #f0d58c; border-radius: 12px; padding: 14px 16px; max-width: 85%; font-size: 13px; }
+  .approval .title { font-weight: 600; color: #8a6100; margin-bottom: 8px; }
+  .approval .cmd { font-family: var(--mono); background: #fff; border: 1px solid #eee0b8; border-radius: 6px; padding: 8px 10px; margin: 6px 0; font-size: 12px; word-break: break-all; }
+  .approval .btns { margin-top: 10px; display: flex; gap: 8px; }
+  .approval button { border: none; border-radius: 6px; padding: 6px 18px; font-size: 13px; cursor: pointer; }
+  .approval .ok { background: #2f9e44; color: #fff; }
+  .approval .no { background: #e03131; color: #fff; }
+  .approval button:disabled { opacity: .5; cursor: default; }
+  .error { align-self: center; color: #e03131; font-size: 13px; background: #fff0f0; border: 1px solid #ffc9c9; border-radius: 8px; padding: 8px 16px; }
+  footer { background: var(--panel); border-top: 1px solid var(--border); padding: 16px 24px; }
+  .input-row { max-width: 900px; margin: 0 auto; display: flex; gap: 10px; }
+  textarea { flex: 1; resize: none; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 14px; font-family: inherit; outline: none; height: 52px; }
+  textarea:focus { border-color: var(--accent); }
+  #send { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 0 24px; font-size: 14px; cursor: pointer; }
+  #send:disabled { opacity: .5; cursor: default; }
+  .typing { color: var(--muted); font-size: 13px; align-self: flex-start; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 SuperAgent</h1>
+  <span class="meta" id="meta">连接中…</span>
+  <span class="spacer"></span>
+  <button id="reset">新对话</button>
+</header>
+<div id="chat"></div>
+<footer>
+  <div class="input-row">
+    <textarea id="input" placeholder="描述你的编程任务，例如：帮我看看 src 目录结构，然后给 utils.js 加上单元测试（Enter 发送，Shift+Enter 换行）"></textarea>
+    <button id="send">发送</button>
+  </div>
+</footer>
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+let sessionId = null;
+let busy = false;
+
+fetch('/api/config').then(r => r.json()).then(c => {
+  document.getElementById('meta').textContent = `${c.model} · ${c.baseURL} · ${c.workspace}`;
+});
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  chat.appendChild(e);
+  chat.scrollTop = chat.scrollHeight;
+  return e;
+}
+
+function setBusy(v) { busy = v; sendBtn.disabled = v; }
+
+async function readSSE(resp, handlers) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 2);
+      if (chunk.startsWith('data: ')) {
+        const data = JSON.parse(chunk.slice(6));
+        handlers(data);
+      }
+    }
+  }
+}
+
+let currentAssistant = null;
+let currentTool = null;
+
+function handleEvent(data) {
+  if (data.type === 'session') sessionId = data.sessionId;
+  else if (data.type === 'text_delta') {
+    if (!currentAssistant) currentAssistant = el('div', 'msg assistant', '');
+    currentAssistant.textContent += data.delta;
+    chat.scrollTop = chat.scrollHeight;
+  }
+  else if (data.type === 'tool_called') {
+    currentAssistant = null;
+    currentTool = el('div', 'tool-chip');
+    currentTool.textContent = `⚙ ${data.name} ${data.arguments.slice(0, 200)}`;
+  }
+  else if (data.type === 'tool_output') {
+    if (currentTool) {
+      const out = document.createElement('div');
+      out.className = 'out';
+      out.textContent = data.output.slice(0, 500);
+      currentTool.appendChild(out);
+      currentTool = null;
+    }
+  }
+  else if (data.type === 'approval_required') renderApproval(data.approvals);
+  else if (data.type === 'error') { el('div', 'error', '出错：' + data.message); setBusy(false); }
+  else if (data.type === 'done') { currentAssistant = null; setBusy(false); }
+}
+
+function renderApproval(approvals) {
+  const box = el('div', 'approval');
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = '⚠ Agent 请求执行以下操作，需要你的批准：';
+  box.appendChild(title);
+  for (const a of approvals) {
+    const cmd = document.createElement('div');
+    cmd.className = 'cmd';
+    cmd.textContent = `${a.name}(${a.arguments})`;
+    box.appendChild(cmd);
+  }
+  const btns = document.createElement('div');
+  btns.className = 'btns';
+  const ok = document.createElement('button'); ok.className = 'ok'; ok.textContent = '批准';
+  const no = document.createElement('button'); no.className = 'no'; no.textContent = '拒绝';
+  btns.appendChild(ok); btns.appendChild(no); box.appendChild(btns);
+  chat.scrollTop = chat.scrollHeight;
+
+  const decide = async (approved) => {
+    ok.disabled = no.disabled = true;
+    title.textContent = approved ? '✓ 已批准，继续执行…' : '✗ 已拒绝';
+    currentAssistant = null;
+    const resp = await fetch('/api/approve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, decisions: approvals.map(a => ({ id: a.id, approved })) }),
+    });
+    await readSSE(resp, handleEvent);
+  };
+  ok.onclick = () => decide(true);
+  no.onclick = () => decide(false);
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || busy) return;
+  input.value = '';
+  el('div', 'msg user', text);
+  setBusy(true);
+  currentAssistant = null;
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, sessionId }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      el('div', 'error', err.error || `请求失败 (${resp.status})`);
+      setBusy(false);
+      return;
+    }
+    await readSSE(resp, handleEvent);
+  } catch (e) {
+    el('div', 'error', '网络错误：' + e.message);
+    setBusy(false);
+  }
+}
+
+sendBtn.onclick = send;
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+document.getElementById('reset').onclick = async () => {
+  if (sessionId) await fetch('/api/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId }) });
+  sessionId = null;
+  chat.innerHTML = '';
+};
+</script>
+</body>
+</html>

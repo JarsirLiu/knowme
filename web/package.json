@@ -1,0 +1,32 @@
+{
+  "private": true,
+  "name": "superagent-web",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3800",
+    "build": "next build",
+    "start": "next start --port 3800",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "^3.0.44",
+    "@openai/agents": "^0.14.0",
+    "@openai/agents-extensions": "^0.14.0",
+    "ai": "^6.0.42",
+    "next": "16.2.6",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-markdown": "^9.0.3",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^16.4.7",
+    "typescript": "^5"
+  }
+}
