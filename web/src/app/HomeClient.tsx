@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Sidebar } from '@/components/Sidebar/Sidebar'
-import { Header, MessageList, InputBar, useChat } from '@/features/chat'
+import { Header, MessageList, InputBar, useAgentChat } from '@/features/chat'
 import { client } from '@/api/client'
 import styles from './HomeClient.module.css'
 
@@ -11,23 +11,32 @@ interface ChatSession {
   updatedAt: string
 }
 
+interface ProjectGroup {
+  name: string
+  icon: string
+  sessions: { id: string; title: string; createdAt: number; updatedAt: number }[]
+}
+
 export default function HomeClient() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentId, setCurrentId] = useState<string>('')
-  const [currentTitle, setCurrentTitle] = useState<string>('新对话')
+  const [currentTitle, setCurrentTitle] = useState<string>('New Session')
   const [input, setInput] = useState('')
   const [initialized, setInitialized] = useState(false)
 
   const {
-    messages,
+    turns,
     isLoading,
     error,
-    pendingToolCall,
     sendMessage,
     approveTool,
     denyTool,
     stop,
-  } = useChat(currentId)
+  } = useAgentChat(currentId)
+
+  const projects: ProjectGroup[] = [
+    { name: 'superagent', icon: '📁', sessions: [] },
+  ]
 
   useEffect(() => {
     client.listSessions().then((list) => {
@@ -71,25 +80,26 @@ export default function HomeClient() {
   return (
     <div className={styles.appLayout}>
       <Sidebar
+        projects={projects}
         sessions={sessions.map((s) => ({ id: s.id, title: s.name, createdAt: 0, updatedAt: 0 }))}
         currentId={currentId}
+        isLoading={isLoading}
         onSelect={handleSelect}
         onNew={handleNew}
       />
       <div className={styles.mainPane}>
         <div className={styles.chatView}>
-          <Header title={currentTitle} description="Coding Agent" onNew={handleNew} />
+          <Header title={currentTitle} onNew={handleNew} />
 
           {error ? (
             <div className={styles.errorBanner}>错误：{error}</div>
           ) : null}
 
           <MessageList
-            messages={messages}
+            turns={turns}
             isLoading={isLoading}
-            pendingToolCall={pendingToolCall}
             onApprove={approveTool}
-            onReject={denyTool}
+            onDeny={denyTool}
           />
 
           <InputBar

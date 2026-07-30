@@ -3,6 +3,11 @@ export interface TextDeltaEvent {
   data: { text: string }
 }
 
+export interface ReasoningDeltaEvent {
+  type: 'reasoning_delta'
+  data: { text: string }
+}
+
 export interface ToolCallStartEvent {
   type: 'tool_call_start'
   data: { id: string; name: string }
@@ -55,6 +60,7 @@ export interface SessionUpdatedEvent {
 
 export type SSEEvent =
   | TextDeltaEvent
+  | ReasoningDeltaEvent
   | ToolCallStartEvent
   | ToolCallDeltaEvent
   | ToolCallAwaitingApprovalEvent

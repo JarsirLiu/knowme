@@ -23,7 +23,6 @@ export class ChatService {
         return
       }
 
-      // Set env BEFORE createCodingAgent so loadConfig() picks up auto-approve
       process.env.SUPERAGENT_AUTO_APPROVE_SHELL = 'true'
       const { agent, cfg } = createCodingAgent()
       console.log(`[CHAT] Model: ${cfg.model}, BaseURL: ${cfg.baseURL}`)
@@ -33,7 +32,6 @@ export class ChatService {
         orderBy: { createdAt: 'asc' },
       })
 
-      // Build AgentInputItem array using @openai/agents helpers
       const input: AgentInputItem[] = []
       for (const msg of history) {
         const role = msg.role as 'user' | 'assistant' | 'system'
@@ -56,27 +54,43 @@ export class ChatService {
       }) as AsyncIterable<RunStreamEvent>
 
       let fullResponse = ''
+      let fullReasoning = ''
 
       for await (const event of result) {
+        if (event.type === 'raw_model_stream_event') {
+          const data = (event as { data: { type: string; delta?: string; itemId?: string } }).data
+
+          if (data.type === 'output_text_delta' && data.delta) {
+            fullResponse += data.delta
+            sendSSE(reply, { type: 'text_delta', data: { text: data.delta } })
+          }
+
+          if (data.type === 'model') {
+            const modelEvent = (event as { data: { event?: { choices?: Array<{ delta?: { reasoning?: string } }> } } }).data
+            const reasoningDelta = modelEvent.event?.choices?.[0]?.delta?.reasoning
+            if (reasoningDelta) {
+              fullReasoning += reasoningDelta
+              sendSSE(reply, { type: 'reasoning_delta', data: { text: reasoningDelta } })
+            }
+          }
+        }
+
         if (event.type === 'run_item_stream_event') {
           const item = (event as { item?: { type: string; rawItem?: unknown } }).item
           if (!item) continue
-
-          if (event.name === 'message_output_created' && item.type === 'message_output_item') {
-            const msgItem = item as unknown as { rawItem: { content?: Array<{ type: string; text?: string }> } }
-            const text = msgItem.rawItem?.content?.find((c) => c.type === 'output_text')
-            if (text) {
-              const delta = text.text || ''
-              fullResponse += delta
-              sendSSE(reply, { type: 'text_delta', data: { text: delta } })
-            }
-          }
 
           if (event.name === 'tool_called' && item.type === 'tool_call_item') {
             const tc = item as unknown as { rawItem: { callId: string; name: string } }
             sendSSE(reply, {
               type: 'tool_call_start',
               data: { id: tc.rawItem.callId, name: tc.rawItem.name },
+            })
+            await this.approvalService.saveToolCall({
+              id: tc.rawItem.callId,
+              sessionId,
+              name: tc.rawItem.name,
+              args: '{}',
+              status: 'running',
             })
           }
 
@@ -97,13 +111,7 @@ export class ChatService {
               data: { id: callId, name, args },
             })
 
-            await this.approvalService.saveToolCall({
-              id: callId,
-              sessionId,
-              name,
-              args,
-              status: 'awaiting_approval',
-            })
+            await this.approvalService.updateToolCall(callId, { status: 'awaiting_approval' })
 
             const approved = await this.approvalService.requestApproval(callId)
             if (!approved) {

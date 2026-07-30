@@ -1,0 +1,138 @@
+/* ToolCallItem.module.css */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.toolCall {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.toolCall.running {
+  border-color: #bfdbfe;
+  background: #f0f7ff;
+}
+
+.toolCall.awaiting_approval {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.toolCall.completed {
+  border-color: #bbf7d0;
+}
+
+.toolCall.denied {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+}
+
+.toolCall.failed {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.toolCall.incomplete {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  opacity: 0.7;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.iconWrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--color-bg-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.statusBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: #dbeafe;
+  color: #1d4ed8;
+  margin-left: auto;
+}
+
+.statusBadge.awaiting {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.details {
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.summary {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary::before {
+  content: '▸ ';
+  font-size: 10px;
+}
+
+details[open] .summary::before {
+  content: '▾ ';
+}
+
+.summary:hover {
+  background: var(--color-bg-soft);
+}
+
+.pre {
+  margin: 0;
+  padding: 8px 12px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

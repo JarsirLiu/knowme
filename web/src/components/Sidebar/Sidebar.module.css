@@ -1,71 +1,69 @@
 .sidebar {
-  width: 260px;
+  width: 250px;
   flex-shrink: 0;
-  background: var(--color-bg-sidebar);
+  background: #f0f0f0;
+  color: #333;
   display: flex;
   flex-direction: column;
   height: 100vh;
-  border-right: 1px solid var(--color-border-soft);
+  font-size: 13px;
+  overflow: hidden;
+  border-right: 1px solid #e0e0e0;
 }
 
 .brandRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 16px 12px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
   letter-spacing: -0.3px;
 }
 
-.brandIcon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.brandRow .brandDropdown {
+  color: #888;
+  font-size: 10px;
+  margin-left: 2px;
 }
 
 .searchRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 16px 8px;
-  padding: 6px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  padding: 0 12px;
 }
 
-.searchIcon { color: var(--color-muted-soft); flex-shrink: 0; }
-
-.searchInput {
-  flex: 1;
+.searchButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
-  outline: none;
-  font-size: 13px;
-  color: var(--text-primary);
-  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
 }
 
-.searchInput::placeholder { color: var(--color-faint); }
+.searchButton:hover {
+  background: #e0e0e0;
+}
 
-.menuSection { padding: 4px 8px; }
+.menuSection {
+  padding: 8px 8px;
+}
 
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 7px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--color-ink-soft);
+  color: #444;
   font-size: 13px;
   cursor: pointer;
   width: 100%;
@@ -74,16 +72,16 @@
   font-family: inherit;
 }
 
-.menuItem:hover { background: var(--color-bg-hover); }
-.menuIcon { flex-shrink: 0; }
+.menuItem:hover {
+  background: #e0e0e0;
+}
 
 .sectionLabel {
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-muted-soft);
-  text-transform: uppercase;
+  color: #888;
   letter-spacing: 0.5px;
-  padding: 10px 16px 4px;
+  padding: 14px 16px 6px;
 }
 
 .projectsList {
@@ -92,23 +90,76 @@
   padding: 0 8px;
 }
 
+.projectsList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.projectsList::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
 .emptyState {
   padding: 16px 8px;
-  font-size: 13px;
-  color: var(--color-faint);
+  font-size: 12px;
+  color: #999;
   text-align: center;
+}
+
+.folderGroup {
+  margin-bottom: 2px;
+}
+
+.folderItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #444;
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.folderItem:hover {
+  background: #e0e0e0;
+}
+
+.folderArrow {
+  font-size: 9px;
+  color: #888;
+  width: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folderText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folderTasks {
+  padding-left: 14px;
 }
 
 .taskItem {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  gap: 4px;
+  padding: 5px 10px 5px 14px;
+  border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--color-muted);
-  font-size: 13px;
+  color: #555;
+  font-size: 12px;
   cursor: pointer;
   width: 100%;
   text-align: left;
@@ -119,42 +170,75 @@
   font-family: inherit;
 }
 
-.taskItem:hover { background: var(--color-bg-hover); }
+.taskItem:hover {
+  background: #e0e0e0;
+  color: #333;
+}
 
 .taskItemActive {
-  background: var(--color-bg-hover);
-  color: var(--text-primary);
+  background: #d6d6d6;
+  color: #222;
   font-weight: 500;
 }
 
-.taskItemText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.taskItemLoading .loadingSpinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #ccc;
+  border-top-color: #666;
+  border-radius: 50%;
+  animation: sidebarSpin 1s linear infinite;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@keyframes sidebarSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sidebarBottom {
-  padding: 10px 16px;
-  border-top: 1px solid var(--color-border-soft);
+  padding: 8px 14px;
+  border-top: 1px solid #e0e0e0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .sidebarBottomLink {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--color-muted);
-  font-size: 13px;
+  color: #555;
+  font-size: 12px;
   cursor: pointer;
   font-family: inherit;
   transition: background 0.15s;
 }
 
-.sidebarBottomLink:hover { background: var(--color-bg-hover); }
-.versionText { font-size: 11px; color: var(--color-faint); }
+.sidebarBottomLink:hover {
+  background: #e0e0e0;
+}
+
+.sidebarHelpButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sidebarHelpButton:hover {
+  background: #e0e0e0;
+}

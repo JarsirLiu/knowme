@@ -1,0 +1,38 @@
+/* MessageList.module.css */
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0 100px;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-muted-soft);
+  gap: 12px;
+  padding-left: 48px;
+}
+
+.emptyIcon {
+  opacity: 0.2;
+  margin-bottom: 4px;
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.emptyHint {
+  font-size: 13px;
+}

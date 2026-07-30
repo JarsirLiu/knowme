@@ -1,9 +1,20 @@
 export { Header } from './Header'
-export { MessageList } from './MessageList'
-export { MessageItem } from './MessageItem'
+export { MessageList } from './components/MessageList'
 export { InputBar } from './InputBar'
-export { ToolCallCompact } from './ToolCallCompact'
-export { ApprovalBanner } from './ApprovalBanner'
-export { MarkdownContent } from './MarkdownContent'
-export { useChat } from './hooks/useChat'
-export type { UIMessage, ChatState } from './hooks/useChat'
+export { Turn } from './components/Turn'
+export { AssistantMessage } from './components/AssistantMessage'
+export { ToolCallItem, ToolCallList } from './components/ToolCallItem'
+export { ApprovalBar } from './components/ApprovalBar'
+export { useAgentChat } from './hooks/useAgentChat'
+export type {
+  ChatState,
+  Turn as TurnType,
+  AssistantMessage as AssistantMessageType,
+  UserMessage,
+  ToolCall,
+  ToolCallStatus,
+  TextContent,
+  ReasoningContent,
+  MessageContent,
+} from './types'
+export { TextMessage, ReasoningMessage } from './messages'

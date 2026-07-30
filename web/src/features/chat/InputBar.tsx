@@ -16,7 +16,7 @@ export function InputBar({
   onSend,
   onStop,
   isLoading,
-  placeholder = '随心输入…',
+  placeholder = '随心输入',
 }: InputBarProps) {
   const [focused, setFocused] = useState(false)
 
@@ -27,12 +27,15 @@ export function InputBar({
     }
   }
 
+  const canSend = value.trim()
+
   return (
     <div className={styles.inputBarWrap}>
       <div className={`${styles.inputBar} ${focused ? styles.inputBarFocused : ''}`}>
         <button className={styles.plusButton} type="button" title="添加附件">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
         <textarea
@@ -46,23 +49,23 @@ export function InputBar({
           rows={1}
         />
         <button
-          className={`${styles.sendButton} ${isLoading ? styles.sendButtonStop : value.trim() ? styles.sendButtonActive : styles.sendButtonDisabled}`}
+          className={`${styles.sendButton} ${isLoading ? styles.sendButtonStop : canSend ? styles.sendButtonSend : styles.sendButtonDisabled}`}
           type="button"
-          disabled={!value.trim() && !isLoading}
-          onClick={() => (isLoading && onStop ? onStop() : value.trim() ? onSend() : undefined)}
-          title={isLoading ? '停止生成' : '发送'}
+          disabled={!canSend && !isLoading}
+          onClick={() => (isLoading && onStop ? onStop() : canSend ? onSend() : undefined)}
+          title={isLoading ? '停止' : '发送'}
         >
-          {isLoading && onStop ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          {isLoading ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
           )}
         </button>
-      </div>
-      <div className={styles.inputBarHint}>
-        <span>按 Enter 发送，Shift+Enter 换行</span>
       </div>
     </div>
   )
