@@ -3,10 +3,6 @@ node_modules/
 *.log
 .next/
 .DS_Store
-web/node_modules/
-web/.next/
-.webbuddy/
-.workbuddy/
-web/tsconfig.tsbuildinfo
 *.tsbuildinfo
-
+dist/
+server/prisma/data.db

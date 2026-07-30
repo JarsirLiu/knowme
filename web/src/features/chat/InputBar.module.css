@@ -25,9 +25,7 @@
   transition: border-color 0.15s;
 }
 
-.inputBarFocused {
-  border-color: #c5c5c5;
-}
+.inputBarFocused { border-color: #c5c5c5; }
 
 .plusButton {
   width: 32px;
@@ -44,9 +42,7 @@
   transition: background 0.15s;
 }
 
-.plusButton:hover {
-  background: var(--color-bg-hover);
-}
+.plusButton:hover { background: var(--color-bg-hover); }
 
 .inputTextarea {
   flex: 1;
@@ -62,9 +58,7 @@
   max-height: 200px;
 }
 
-.inputTextarea::placeholder {
-  color: var(--color-muted-soft);
-}
+.inputTextarea::placeholder { color: var(--color-muted-soft); }
 
 .sendButton {
   width: 32px;
@@ -79,21 +73,9 @@
   cursor: pointer;
 }
 
-.sendButtonActive {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-}
-
-.sendButtonDisabled {
-  background: var(--color-bg-active);
-  color: var(--color-muted-soft);
-  cursor: not-allowed;
-}
-
-.sendButtonStop {
-  background: var(--text-primary);
-  color: var(--bg-primary);
-}
+.sendButtonActive { background: var(--text-primary); color: var(--bg-primary); }
+.sendButtonDisabled { background: var(--color-bg-active); color: var(--color-muted-soft); cursor: not-allowed; }
+.sendButtonStop { background: var(--text-primary); color: var(--bg-primary); }
 
 .inputBarHint {
   display: flex;

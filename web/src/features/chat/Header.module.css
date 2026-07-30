@@ -1,17 +1,14 @@
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 12px 20px;
   border-bottom: 1px solid var(--color-border-soft);
   flex-shrink: 0;
   background: var(--bg-primary);
 }
 
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.headerLeft { display: flex; align-items: center; gap: 8px; }
 
 .headerTitle {
   margin: 0;
@@ -29,11 +26,7 @@
   border-radius: 12px;
 }
 
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+.headerRight { display: flex; align-items: center; gap: 4px; }
 
 .headerButton {
   display: flex;
@@ -50,6 +43,4 @@
   font-family: inherit;
 }
 
-.headerButton:hover {
-  background: var(--color-bg-hover);
-}
+.headerButton:hover { background: var(--color-bg-hover); }

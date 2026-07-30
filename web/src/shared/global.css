@@ -1,4 +1,4 @@
-@import "./variables.css";
+@import './variables.css';
 
 * {
   margin: 0;
@@ -22,7 +22,6 @@ body {
   overflow: hidden;
 }
 
-/* Keyframes */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -37,7 +36,6 @@ body {
   50%      { opacity: 1; }
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

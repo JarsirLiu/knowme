@@ -41,10 +41,7 @@
   border-radius: var(--radius-sm);
 }
 
-.searchIcon {
-  color: var(--color-muted-soft);
-  flex-shrink: 0;
-}
+.searchIcon { color: var(--color-muted-soft); flex-shrink: 0; }
 
 .searchInput {
   flex: 1;
@@ -56,15 +53,9 @@
   font-family: inherit;
 }
 
-.searchInput::placeholder {
-  color: var(--color-faint);
-}
+.searchInput::placeholder { color: var(--color-faint); }
 
-/* ---------- Menu ---------- */
-
-.menuSection {
-  padding: 4px 8px;
-}
+.menuSection { padding: 4px 8px; }
 
 .menuItem {
   display: flex;
@@ -83,15 +74,8 @@
   font-family: inherit;
 }
 
-.menuItem:hover {
-  background: var(--color-bg-hover);
-}
-
-.menuIcon {
-  flex-shrink: 0;
-}
-
-/* ---------- Section label ---------- */
+.menuItem:hover { background: var(--color-bg-hover); }
+.menuIcon { flex-shrink: 0; }
 
 .sectionLabel {
   font-size: 11px;
@@ -102,12 +86,17 @@
   padding: 10px 16px 4px;
 }
 
-/* ---------- Projects list ---------- */
-
 .projectsList {
   flex: 1;
   overflow-y: auto;
   padding: 0 8px;
+}
+
+.emptyState {
+  padding: 16px 8px;
+  font-size: 13px;
+  color: var(--color-faint);
+  text-align: center;
 }
 
 .taskItem {
@@ -130,9 +119,7 @@
   font-family: inherit;
 }
 
-.taskItem:hover {
-  background: var(--color-bg-hover);
-}
+.taskItem:hover { background: var(--color-bg-hover); }
 
 .taskItemActive {
   background: var(--color-bg-hover);
@@ -140,17 +127,11 @@
   font-weight: 500;
 }
 
-.taskItemActive:hover {
-  background: var(--color-bg-hover);
-}
-
 .taskItemText {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* ---------- Bottom ---------- */
 
 .sidebarBottom {
   padding: 10px 16px;
@@ -175,6 +156,5 @@
   transition: background 0.15s;
 }
 
-.sidebarBottomLink:hover {
-  background: var(--color-bg-hover);
-}
+.sidebarBottomLink:hover { background: var(--color-bg-hover); }
+.versionText { font-size: 11px; color: var(--color-faint); }

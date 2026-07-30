@@ -1,19 +1,14 @@
 {
   "name": "superagent",
   "version": "0.1.0",
-  "description": "本地 coding agent，基于 @openai/agents，支持 OpenAI 兼容 chat/completions 模型",
-  "type": "module",
+  "private": true,
+  "description": "Local coding agent powered by @openai/agents",
   "scripts": {
-    "web": "npm --prefix web run dev",
-    "web:build": "npm --prefix web run build",
-    "web:start": "npm --prefix web run start",
-    "mock": "node test/mock-llm.js",
-    "test:e2e": "node test/e2e.js"
-  },
-  "dependencies": {
-    "@openai/agents": "^0.14.0",
-    "@openai/agents-extensions": "^0.14.0",
-    "openai": "^6.46.0",
-    "zod": "^4.1.5"
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "build:packages": "npm --prefix packages/core run build && npm --prefix packages/agent run build && npm --prefix packages/client run build",
+    "build:server": "npm --prefix server run build",
+    "build:web": "npm --prefix web run build",
+    "build": "npm run build:packages && npm run build:server && npm run build:web"
   }
 }

@@ -1,56 +1,39 @@
-import { useState } from "react";
-
-import { IconPlus, IconSend, IconStop } from "@/components/Icons";
-
-import styles from "./InputBar.module.css";
+import { useState } from 'react'
+import styles from './InputBar.module.css'
 
 type InputBarProps = {
-  value: string;
-  onChange: (v: string) => void;
-  onSend: () => void;
-  onStop?: () => void;
-  isLoading: boolean;
-  placeholder?: string;
-};
+  value: string
+  onChange: (v: string) => void
+  onSend: () => void
+  onStop?: () => void
+  isLoading: boolean
+  placeholder?: string
+}
 
-/**
- * 输入栏 — 居中、带阴影、圆角胶囊风格，参考 Codex 的输入框设计。
- * 支持 Enter 发送 / Shift+Enter 换行。
- */
 export function InputBar({
   value,
   onChange,
   onSend,
   onStop,
   isLoading,
-  placeholder = "随心输入…",
+  placeholder = '随心输入…',
 }: InputBarProps) {
-  const [focused, setFocused] = useState(false);
+  const [focused, setFocused] = useState(false)
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (value.trim()) onSend();
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (value.trim()) onSend()
     }
-  };
-
-  const handleSend = () => {
-    if (value.trim()) {
-      onSend();
-    }
-  };
+  }
 
   return (
     <div className={styles.inputBarWrap}>
-      <div
-        className={[styles.inputBar, focused && styles.inputBarFocused].filter(Boolean).join(" ")}
-      >
-        <button
-          className={styles.plusButton}
-          type="button"
-          title="添加附件"
-        >
-          <IconPlus />
+      <div className={`${styles.inputBar} ${focused ? styles.inputBarFocused : ''}`}>
+        <button className={styles.plusButton} type="button" title="添加附件">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
         </button>
         <textarea
           className={styles.inputTextarea}
@@ -63,21 +46,24 @@ export function InputBar({
           rows={1}
         />
         <button
-          className={[
-            styles.sendButton,
-            isLoading ? styles.sendButtonStop : value.trim() ? styles.sendButtonActive : styles.sendButtonDisabled,
-          ].filter(Boolean).join(" ")}
+          className={`${styles.sendButton} ${isLoading ? styles.sendButtonStop : value.trim() ? styles.sendButtonActive : styles.sendButtonDisabled}`}
           type="button"
-          disabled={!value.trim()}
-          onClick={() => isLoading && onStop ? onStop() : handleSend()}
-          title={isLoading ? "停止生成" : "发送"}
+          disabled={!value.trim() && !isLoading}
+          onClick={() => (isLoading && onStop ? onStop() : value.trim() ? onSend() : undefined)}
+          title={isLoading ? '停止生成' : '发送'}
         >
-          {isLoading && onStop ? <IconStop size={16} /> : <IconSend />}
+          {isLoading && onStop ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          )}
         </button>
       </div>
       <div className={styles.inputBarHint}>
         <span>按 Enter 发送，Shift+Enter 换行</span>
       </div>
     </div>
-  );
+  )
 }

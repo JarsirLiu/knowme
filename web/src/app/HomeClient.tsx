@@ -1,191 +1,106 @@
-'use client';
-
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DefaultChatTransport } from 'ai';
-import type { UIMessage } from 'ai';
-import { useChat } from '@ai-sdk/react';
-
-import { Sidebar } from '@/components/Sidebar/Sidebar';
-import { Header } from '@/features/chat/Header';
-import { MessageList } from '@/features/chat/MessageList';
-import { InputBar } from '@/features/chat/InputBar';
-
-import { getItem, setItem, generateId } from '@/shared';
-
-import styles from './HomeClient.module.css';
-
-/* ---- Session types ---- */
+import { useCallback, useEffect, useState } from 'react'
+import { Sidebar } from '@/components/Sidebar/Sidebar'
+import { Header, MessageList, InputBar, useChat } from '@/features/chat'
+import { client } from '@/api/client'
+import styles from './HomeClient.module.css'
 
 interface ChatSession {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
 }
 
-const SESSIONS_KEY = 'superagent-sessions';
-
-/* ---- HomeClient ---- */
-
 export default function HomeClient() {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentId, setCurrentId] = useState<string>('');
-  const [currentTitle, setCurrentTitle] = useState<string>('新对话');
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentId, setCurrentId] = useState<string>('')
+  const [currentTitle, setCurrentTitle] = useState<string>('新对话')
+  const [input, setInput] = useState('')
+  const [initialized, setInitialized] = useState(false)
 
-  // 初始化
+  const {
+    messages,
+    isLoading,
+    error,
+    pendingToolCall,
+    sendMessage,
+    approveTool,
+    denyTool,
+    stop,
+  } = useChat(currentId)
+
   useEffect(() => {
-    const loaded = getItem<ChatSession[]>(SESSIONS_KEY);
-    setSessions(loaded ?? []);
-    if (loaded && loaded.length > 0) {
-      setCurrentId(loaded[0].id);
-      setCurrentTitle(loaded[0].title);
-    } else {
-      const id = generateId();
-      setCurrentId(id);
-    }
-  }, []);
+    client.listSessions().then((list) => {
+      if (list.length > 0) {
+        setCurrentId(list[0].id)
+        setCurrentTitle(list[0].name)
+        setSessions(list)
+        setInitialized(true)
+      } else {
+        client.createSession().then((s) => {
+          setCurrentId(s.id)
+          setCurrentTitle(s.name)
+          setSessions([s])
+          setInitialized(true)
+        })
+      }
+    })
+  }, [])
 
-  const transport = useMemo(
-    () => new DefaultChatTransport<UIMessage>({ api: '/api/chat' }),
-    [],
-  );
-
-  const handleNew = useCallback(() => {
-    const id = generateId();
-    setCurrentId(id);
-    setCurrentTitle('新对话');
-  }, []);
+  const handleNew = useCallback(async () => {
+    const s = await client.createSession()
+    setCurrentId(s.id)
+    setCurrentTitle(s.name)
+    setSessions((prev) => [s, ...prev])
+  }, [])
 
   const handleSelect = useCallback((id: string) => {
-    setCurrentId(id);
-    const session = sessions.find((s) => s.id === id);
-    if (session) {
-      setCurrentTitle(session.title);
-    }
-  }, [sessions]);
+    setCurrentId(id)
+    const session = sessions.find((s) => s.id === id)
+    if (session) setCurrentTitle(session.name)
+  }, [sessions])
 
-  const handleTitleChange = useCallback(
-    (title: string) => {
-      setCurrentTitle(title);
-      setSessions((prev) => {
-        const exists = prev.find((s) => s.id === currentId);
-        let next: ChatSession[];
-        if (exists) {
-          next = prev.map((s) =>
-            s.id === currentId ? { ...s, title, updatedAt: Date.now() } : s,
-          );
-        } else {
-          next = [
-            { id: currentId, title, createdAt: Date.now(), updatedAt: Date.now() },
-            ...prev,
-          ];
-        }
-        next = next.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 50);
-        setItem(SESSIONS_KEY, next);
-        return next;
-      });
-    },
-    [currentId],
-  );
+  const handleSend = useCallback(() => {
+    if (!input.trim()) return
+    sendMessage(input)
+    setInput('')
+  }, [input, sendMessage])
+
+  if (!initialized) return null
 
   return (
     <div className={styles.appLayout}>
       <Sidebar
-        sessions={sessions}
+        sessions={sessions.map((s) => ({ id: s.id, title: s.name, createdAt: 0, updatedAt: 0 }))}
         currentId={currentId}
         onSelect={handleSelect}
         onNew={handleNew}
       />
       <div className={styles.mainPane}>
-        <ChatView
-          title={currentTitle}
-          description="Coding Agent"
-          sessionId={currentId}
-          transport={transport}
-          onTitleChange={handleTitleChange}
-        />
+        <div className={styles.chatView}>
+          <Header title={currentTitle} description="Coding Agent" onNew={handleNew} />
+
+          {error ? (
+            <div className={styles.errorBanner}>错误：{error}</div>
+          ) : null}
+
+          <MessageList
+            messages={messages}
+            isLoading={isLoading}
+            pendingToolCall={pendingToolCall}
+            onApprove={approveTool}
+            onReject={denyTool}
+          />
+
+          <InputBar
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            onStop={stop}
+            isLoading={isLoading}
+          />
+        </div>
       </div>
     </div>
-  );
-}
-
-/* ---- ChatView (composes Header + MessageList + InputBar) ---- */
-
-function ChatView({
-  title,
-  description,
-  sessionId,
-  transport,
-  onTitleChange,
-}: {
-  title: string;
-  description: string;
-  sessionId: string;
-  transport: DefaultChatTransport<UIMessage>;
-  onTitleChange: (title: string) => void;
-}) {
-  const [input, setInput] = useState('');
-  const [messageList, setMessageList] = useState<UIMessage[]>([]);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  const {
-    messages,
-    sendMessage,
-    status,
-    error,
-    addToolApprovalResponse,
-  } = useChat({
-    id: sessionId,
-    transport,
-  });
-
-  // 同步消息
-  useEffect(() => {
-    setMessageList(messages ?? []);
-  }, [messages]);
-
-  const onApprove = (approvalId: string) =>
-    void addToolApprovalResponse({ id: approvalId, approved: true });
-  const onReject = (approvalId: string) =>
-    void addToolApprovalResponse({ id: approvalId, approved: false });
-
-  const isLoading = status === 'submitted' || status === 'streaming';
-
-  return (
-    <div className={styles.chatView}>
-      <Header
-        title={title}
-        description={description}
-        onNew={() => {
-          if (typeof window !== 'undefined') window.location.reload();
-        }}
-      />
-
-      {error ? (
-        <div className={styles.errorBanner}>
-          错误：{error.message}
-        </div>
-      ) : null}
-
-      <MessageList
-        messages={messageList}
-        isLoading={isLoading}
-        onApprove={onApprove}
-        onReject={onReject}
-        onTitleChange={onTitleChange}
-        scrollRef={scrollRef}
-      />
-
-      <InputBar
-        value={input}
-        onChange={setInput}
-        onSend={() => {
-          if (!input.trim()) return;
-          sendMessage({ text: input }, { body: { sessionId } });
-          setInput('');
-        }}
-        isLoading={isLoading}
-      />
-    </div>
-  );
+  )
 }

@@ -1,47 +1,59 @@
-.approval {
-  margin: 8px 0;
-  padding: 10px 14px;
+.banner {
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
   border-radius: var(--radius);
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-  color: #92400e;
+  font-weight: 500;
+  color: #795548;
 }
 
-.approvalTitle {
-  font-weight: 600;
-  margin-bottom: 8px;
+.warningIcon { color: #f9a825; flex-shrink: 0; }
+
+.toolName {
+  font-family: var(--font-mono);
+  background: #fff3e0;
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
-.approvalActions {
+.args {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.args pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.actions {
   display: flex;
   gap: 8px;
 }
 
-.approvalApprove {
-  display: flex;
-  align-items: center;
-  padding: 6px 14px;
+.approveBtn, .rejectBtn {
+  padding: 6px 16px;
   border-radius: var(--radius-sm);
   border: none;
-  background: #22c55e;
-  color: #fff;
   font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
   font-family: inherit;
+  transition: opacity 0.15s;
 }
 
-.approvalReject {
-  display: flex;
-  align-items: center;
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--bg-primary);
-  color: #374151;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-}
+.approveBtn { background: #4caf50; color: #fff; }
+.rejectBtn { background: #f44336; color: #fff; }
+.approveBtn:hover, .rejectBtn:hover { opacity: 0.85; }
