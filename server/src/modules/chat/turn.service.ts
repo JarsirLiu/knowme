@@ -7,7 +7,7 @@ import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { RunEventStore } from '../events/run-event-store.js'
 import { PrismaAgentSession } from '../history/agent-session-store.js'
-import { loadSessionCompactionOptions } from '../history/session-compaction.js'
+import { estimateTokens, loadSessionCompactionOptions } from '../history/session-compaction.js'
 
 type TurnTarget =
   | { projectId: string; conversationId?: undefined }
@@ -129,6 +129,14 @@ export class TurnService {
       })
 
       const completedStream = await this.drainStream(agent, stream, runId, reply, session, cfg.maxTurns, signal)
+      const usage = getLatestModelUsage(completedStream.state)
+      if (usage) {
+        await this.eventStore.append(runId, 'run.usage', {
+          ...usage,
+          estimatedTokens: estimateTokens(await session.getItems()),
+          source: 'provider',
+        })
+      }
       const finalOutput = typeof completedStream.finalOutput === 'string'
         ? completedStream.finalOutput
         : completedStream.finalOutput == null
@@ -277,5 +285,33 @@ export class TurnService {
       await this.eventStore.append(runId, 'tool.output', { id, result })
       sendSSE(reply, { type: 'tool_call_completed', data: { id, result } })
     }
+  }
+}
+
+function getLatestModelUsage(state: unknown): {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+} | undefined {
+  if (!state || typeof state !== 'object') return undefined
+  const record = state as Record<string, unknown>
+  const responses = Array.isArray(record._modelResponses) ? record._modelResponses : []
+  const lastResponse = responses.at(-1)
+  const responseRecord = lastResponse && typeof lastResponse === 'object'
+    ? lastResponse as Record<string, unknown>
+    : undefined
+  const usageCandidate = responseRecord?.usage ?? record.usage
+  if (!usageCandidate || typeof usageCandidate !== 'object') return undefined
+
+  const usage = usageCandidate as Record<string, unknown>
+  const inputTokens = Number(usage.inputTokens)
+  const outputTokens = Number(usage.outputTokens)
+  const totalTokens = Number(usage.totalTokens)
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens)) return undefined
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: Number.isFinite(totalTokens) ? totalTokens : inputTokens + outputTokens,
   }
 }

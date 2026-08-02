@@ -30,6 +30,8 @@ export interface SessionCompactionResult {
   summary?: string
   estimatedTokensBefore: number
   estimatedTokensAfter: number
+  predictedInputTokens: number
+  confirmedInputTokens?: number
   inputBudgetTokens: number
   recentTokenBudget: number
 }
@@ -116,22 +118,26 @@ export async function compactSession(
   const force = trigger === 'manual'
   const budget = createBudget(options)
   const estimatedTokensBefore = estimateTokens(items)
+  const baseline = await readUsageBaseline(sessionId)
+  const predictedInputTokens = baseline
+    ? Math.max(0, baseline.inputTokens + estimatedTokensBefore - baseline.estimatedTokens)
+    : estimatedTokensBefore
 
   if (!force && !options.enabled) {
-    return skipped('auto compaction disabled', items.length, estimatedTokensBefore, budget)
+    return skipped('auto compaction disabled', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
-  if (!force && estimatedTokensBefore < budget.compactBefore) {
-    return skipped('context token budget not reached', items.length, estimatedTokensBefore, budget)
+  if (!force && predictedInputTokens < budget.compactBefore) {
+    return skipped('context token budget not reached', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const selection = selectRecentTail(items, options.keepRecentTokens)
   if (!selection) {
-    return skipped('no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, budget)
+    return skipped('no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const compactedItems = items.slice(0, selection.startIndex)
   if (compactedItems.length === 0) {
-    return skipped('no historical turn available to compact', items.length, estimatedTokensBefore, budget)
+    return skipped('no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const summary = await options.summarizer.summarize({
@@ -156,6 +162,8 @@ export async function compactSession(
     summary,
     estimatedTokensBefore,
     estimatedTokensAfter: estimateTokens(replacement),
+    predictedInputTokens,
+    ...(baseline ? { confirmedInputTokens: baseline.inputTokens } : {}),
     inputBudgetTokens: budget.inputBudgetTokens,
     recentTokenBudget: options.keepRecentTokens,
   }
@@ -183,6 +191,35 @@ async function readSessionItems(sessionId: string): Promise<AgentInputItem[]> {
     orderBy: { sequence: 'asc' },
   })
   return rows.map((row) => JSON.parse(row.payload) as AgentInputItem)
+}
+
+async function readUsageBaseline(
+  sessionId: string,
+): Promise<{ inputTokens: number; estimatedTokens: number } | undefined> {
+  const session = await prisma.agentSession.findUnique({
+    where: { id: sessionId },
+    select: { conversationId: true },
+  })
+  if (!session) return undefined
+
+  const event = await prisma.runEvent.findFirst({
+    where: {
+      type: 'run.usage',
+      run: { conversationId: session.conversationId },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!event) return undefined
+
+  try {
+    const payload = JSON.parse(event.payload) as Record<string, unknown>
+    const inputTokens = Number(payload.inputTokens)
+    const estimatedTokens = Number(payload.estimatedTokens)
+    if (!Number.isFinite(inputTokens) || !Number.isFinite(estimatedTokens)) return undefined
+    return { inputTokens, estimatedTokens }
+  } catch {
+    return undefined
+  }
 }
 
 function createBudget(options: SessionCompactionOptions) {
@@ -293,7 +330,7 @@ function truncateMiddle(value: string, maxChars: number): string {
   return value.slice(0, half) + '\n...[truncated]...\n' + value.slice(-half)
 }
 
-function estimateTokens(value: unknown): number {
+export function estimateTokens(value: unknown): number {
   const text = typeof value === 'string' ? value : stringify(value)
   let tokens = 0
   for (const character of text) {
@@ -319,7 +356,9 @@ function skipped(
   reason: string,
   itemCount: number,
   estimatedTokensBefore: number,
+  predictedInputTokens: number,
   budget: { inputBudgetTokens: number; compactBefore: number },
+  baseline?: { inputTokens: number; estimatedTokens: number },
 ): SessionCompactionResult {
   return {
     status: 'skipped',
@@ -330,6 +369,8 @@ function skipped(
     keptItems: itemCount,
     estimatedTokensBefore,
     estimatedTokensAfter: estimatedTokensBefore,
+    predictedInputTokens,
+    ...(baseline ? { confirmedInputTokens: baseline.inputTokens } : {}),
     inputBudgetTokens: budget.inputBudgetTokens,
     recentTokenBudget: 0,
   }

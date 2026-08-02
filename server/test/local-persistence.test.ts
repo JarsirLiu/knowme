@@ -8,6 +8,7 @@ import { prisma } from '../src/db/client.js'
 import { ensureDatabase } from '../src/db/ensure-database.js'
 import { ApprovalService } from '../src/modules/approvals/approval.service.js'
 import { ConversationService } from '../src/modules/conversations/conversation.service.js'
+import { RunEventStore } from '../src/modules/events/run-event-store.js'
 import { PrismaAgentSession } from '../src/modules/history/agent-session-store.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
 
@@ -110,6 +111,12 @@ test('manual context compaction summarizes old session items and keeps recent it
     },
   })
   await session.addItems(items)
+  await new RunEventStore().append(turn.run.id, 'run.usage', {
+    inputTokens: 95,
+    outputTokens: 10,
+    totalTokens: 105,
+    estimatedTokens: 10,
+  })
 
   const result = await session.compact('manual')
  assert.equal(result.status, 'compacted')
@@ -117,6 +124,8 @@ test('manual context compaction summarizes old session items and keeps recent it
   assert.equal(result.afterItems, 2)
   assert.equal(result.compactedItems, 4)
   assert.ok(result.estimatedTokensBefore >= 90)
+  assert.equal(result.confirmedInputTokens, 95)
+  assert.equal(result.predictedInputTokens, 95 + result.estimatedTokensBefore - 10)
 
   const compacted = await session.getItems()
   assert.equal(compacted.length, 2)

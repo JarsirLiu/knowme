@@ -83,6 +83,7 @@ export class PrismaAgentSession implements Session {
         keptItems: 0,
         estimatedTokensBefore: 0,
         estimatedTokensAfter: 0,
+        predictedInputTokens: 0,
         inputBudgetTokens: 0,
         recentTokenBudget: 0,
       }
