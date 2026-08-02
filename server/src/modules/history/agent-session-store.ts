@@ -1,4 +1,5 @@
 import type { AgentInputItem, Session } from '@openai/agents'
+import { randomUUID } from 'node:crypto'
 import { prisma } from '../../db/client.js'
 import {
   compactSession,
@@ -6,12 +7,15 @@ import {
   type SessionCompactionOptions,
   type SessionCompactionResult,
   type SessionCompactionTrigger,
+  type CompactionObserver,
+  persistCompactionMessage,
 } from './session-compaction.js'
 
 export class PrismaAgentSession implements Session {
   constructor(
     private readonly sessionId: string,
     private readonly compaction?: SessionCompactionOptions,
+    private readonly observer?: CompactionObserver,
   ) {}
 
   async getSessionId(): Promise<string> {
@@ -76,6 +80,7 @@ export class PrismaAgentSession implements Session {
     if (!this.compaction) {
       return {
         status: 'skipped',
+        trigger,
         reason: 'compaction not configured',
         beforeItems: 0,
         afterItems: 0,
@@ -94,10 +99,17 @@ export class PrismaAgentSession implements Session {
   async runCompaction(): Promise<null> {
     if (!this.compaction) return null
 
+    const id = randomUUID()
     try {
-      await compactSession(this.sessionId, this.compaction, 'auto')
+      await this.observer?.started?.({ id, trigger: 'auto' })
+      const result = await compactSession(this.sessionId, this.compaction, 'auto')
+      if (result.status === 'compacted') {
+        await persistCompactionMessage(this.sessionId, result)
+      }
+      await this.observer?.completed?.({ id, trigger: 'auto', result })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      await this.observer?.failed?.({ id, trigger: 'auto', error: message }).catch(() => undefined)
       console.warn('[context-compaction] skipped:', message)
     }
 

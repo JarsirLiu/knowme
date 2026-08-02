@@ -1,6 +1,9 @@
 import { prisma } from '../../db/client.js'
 import { PrismaAgentSession } from '../history/agent-session-store.js'
-import { loadSessionCompactionOptions } from '../history/session-compaction.js'
+import {
+  loadSessionCompactionOptions,
+  persistCompactionMessage,
+} from '../history/session-compaction.js'
 
 function titleFromMessage(message: string): string {
   const title = message.replace(/\s+/g, ' ').trim()
@@ -138,7 +141,10 @@ export class ConversationService {
       orderBy: { createdAt: 'asc' },
     })
 
-    return { conversation, messages }
+    return {
+      conversation,
+      messages: messages.map((message) => decodeTimelineMessage(message)),
+    }
   }
 
   async compactContext(id: string) {
@@ -159,7 +165,12 @@ export class ConversationService {
 
     const sessionId = await this.getSessionId(id)
     const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions())
-    return session.compact('manual')
+    const result = await session.compact('manual')
+    if (result.status === 'compacted') {
+      await persistCompactionMessage(sessionId, result)
+      await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    }
+    return result
   }
 
   async getSessionId(conversationId: string): Promise<string> {
@@ -169,4 +180,41 @@ export class ConversationService {
     if (!session) throw new Error(`Agent session not found for conversation: ${conversationId}`)
     return session.id
   }
+}
+
+function decodeTimelineMessage(message: {
+  id: string
+  runId: string | null
+  role: string
+  content: string
+  createdAt: Date
+}) {
+  if (message.role !== 'system') return message
+
+  try {
+    const payload = JSON.parse(message.content) as Record<string, unknown>
+    if (payload.kind !== 'context_compaction') return message
+    return {
+      id: message.id,
+      runId: message.runId,
+      role: 'system' as const,
+      content: '',
+      kind: 'context_compaction' as const,
+      trigger: payload.trigger === 'manual' ? 'manual' as const : 'auto' as const,
+      compactionStatus: payload.status === 'failed' ? 'failed' as const : 'completed' as const,
+      compactedItems: numberValue(payload.compactedItems),
+      keptItems: numberValue(payload.keptItems),
+      estimatedTokensBefore: numberValue(payload.estimatedTokensBefore),
+      estimatedTokensAfter: numberValue(payload.estimatedTokensAfter),
+      predictedInputTokens: numberValue(payload.predictedInputTokens),
+      inputBudgetTokens: numberValue(payload.inputBudgetTokens),
+      createdAt: message.createdAt,
+    }
+  } catch {
+    return message
+  }
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }

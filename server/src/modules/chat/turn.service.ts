@@ -111,7 +111,41 @@ export class TurnService {
 
     const { agent, cfg } = createCodingAgent({ workspace: project.rootPath })
     const sessionId = await this.conversationService.getSessionId(conversationId)
-    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions())
+    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), {
+      started: async ({ id, trigger }) => {
+        await this.eventStore.append(runId, 'context.compaction.started', { id, trigger })
+        sendSSE(reply, {
+          type: 'context_compaction',
+          data: { id, trigger, status: 'started' },
+        })
+      },
+      completed: async ({ id, trigger, result }) => {
+        await this.eventStore.append(runId, 'context.compaction.completed', {
+          id,
+          trigger,
+          compactedItems: result.compactedItems,
+          keptItems: result.keptItems,
+        })
+        sendSSE(reply, {
+          type: 'context_compaction',
+          data: {
+            id,
+            trigger,
+            status: 'completed',
+            compactedItems: result.compactedItems,
+            keptItems: result.keptItems,
+            reason: result.reason,
+          },
+        })
+      },
+      failed: async ({ id, trigger, error }) => {
+        await this.eventStore.append(runId, 'context.compaction.failed', { id, trigger, error })
+        sendSSE(reply, {
+          type: 'context_compaction',
+          data: { id, trigger, status: 'failed', error },
+        })
+      },
+    })
 
     await prisma.agentRun.update({
       where: { id: runId },

@@ -2,23 +2,37 @@ import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ConversationTimeline, TimelineMessage } from '@superagent/core'
 import { client } from '@/api/client'
 import { chatReducer } from '../state/reducer'
-import type { AssistantPart, ChatState, Turn } from '../types'
+import type { AssistantPart, ChatEntry, ChatState, ContextCompaction, Turn } from '../types'
 
 export type ActiveConversation =
   | { kind: 'draft'; draftId: string; projectId: string; conversationId?: string; title?: string }
   | { kind: 'persisted'; conversationId: string; projectId: string }
 
 const INITIAL_STATE: ChatState = {
-  turns: [],
+  entries: [],
   isLoading: false,
+  isCompacting: false,
   error: null,
 }
 
-function timelineToTurns(timeline: ConversationTimeline): Turn[] {
-  const turns: Turn[] = []
+function timelineToEntries(timeline: ConversationTimeline): ChatEntry[] {
+  const entries: ChatEntry[] = []
   let pendingUser: TimelineMessage | undefined
+  let pendingCompactions: ContextCompaction[] = []
 
   for (const message of timeline.messages) {
+    if (message.kind === 'context_compaction') {
+      const compaction: ContextCompaction = {
+        id: message.id,
+        trigger: message.trigger ?? 'auto',
+        status: message.compactionStatus === 'failed' ? 'failed' : 'completed',
+        compactedItems: message.compactedItems,
+        keptItems: message.keptItems,
+      }
+      if (compaction.trigger === 'auto' && pendingUser) pendingCompactions.push(compaction)
+      else entries.push({ type: 'compaction', compaction })
+      continue
+    }
     if (message.role === 'user') {
       pendingUser = message
       continue
@@ -29,7 +43,12 @@ function timelineToTurns(timeline: ConversationTimeline): Turn[] {
     pendingUser = undefined
     if (!user) continue
 
-    turns.push({
+    const parts: AssistantPart[] = [
+      ...pendingCompactions.map((compaction): AssistantPart => ({ type: 'compaction', compaction })),
+      { type: 'content', content: { type: 'text', text: message.content } },
+      ...(message.toolCalls ?? []).map((tool): AssistantPart => ({ type: 'tool', callId: tool.id })),
+    ]
+    entries.push({ type: 'turn', turn: {
       id: message.runId ?? message.id,
       userMessage: {
         id: user.id,
@@ -50,16 +69,14 @@ function timelineToTurns(timeline: ConversationTimeline): Turn[] {
           result: tool.result,
           error: tool.error,
         })),
-        parts: [
-          { type: 'content', content: { type: 'text', text: message.content } },
-          ...(message.toolCalls ?? []).map((tool): AssistantPart => ({ type: 'tool', callId: tool.id })),
-        ],
+        parts,
       },
-    })
+    } })
+    pendingCompactions = []
   }
 
   if (pendingUser) {
-    turns.push({
+    entries.push({ type: 'turn', turn: {
       id: pendingUser.runId ?? pendingUser.id,
       userMessage: {
         id: pendingUser.id,
@@ -75,10 +92,10 @@ function timelineToTurns(timeline: ConversationTimeline): Turn[] {
         toolCalls: [],
         parts: [],
       },
-    })
+    } })
   }
 
-  return turns
+  return entries
 }
 
 export function useAgentChat(
@@ -101,7 +118,7 @@ export function useAgentChat(
 
     client.getTimeline(target.conversationId)
       .then((timeline) => {
-        if (!cancelled) dispatch({ type: 'LOAD_TURNS', turns: timelineToTurns(timeline) })
+        if (!cancelled) dispatch({ type: 'LOAD_ENTRIES', entries: timelineToEntries(timeline) })
       })
       .catch((error) => {
         if (!cancelled) dispatch({ type: 'ERROR', message: error instanceof Error ? error.message : String(error) })
@@ -112,7 +129,30 @@ export function useAgentChat(
 
   const sendMessage = useCallback(async (text: string) => {
     const activeTarget = target
-    if (!activeTarget || !text.trim() || state.isLoading) return
+    if (!activeTarget || !text.trim() || state.isLoading || state.isCompacting) return
+
+    if (text.trim() === '/compact') {
+      const conversationId = activeTarget.kind === 'persisted' ? activeTarget.conversationId : activeTarget.conversationId
+      if (!conversationId) return
+      const id = crypto.randomUUID()
+      dispatch({ type: 'COMPACTION_START', compaction: { id, trigger: 'manual', status: 'running' } })
+      try {
+        const result = await client.compactContext(conversationId)
+        dispatch({
+          type: 'COMPACTION_UPDATE',
+          id,
+          update: {
+            status: 'completed',
+            compactedItems: result.compactedItems,
+            keptItems: result.keptItems,
+            reason: result.reason,
+          },
+        })
+      } catch (error) {
+        dispatch({ type: 'COMPACTION_UPDATE', id, update: { status: 'failed', error: error instanceof Error ? error.message : String(error) } })
+      }
+      return
+    }
 
     const turnId = crypto.randomUUID()
     const controller = new AbortController()
@@ -143,6 +183,13 @@ export function useAgentChat(
             break
           case 'reasoning_delta':
             dispatch({ type: 'CONTENT_APPEND', turnId, content: { type: 'reasoning', text: event.data.text } })
+            break
+          case 'context_compaction':
+            if (event.data.status === 'started') {
+              dispatch({ type: 'COMPACTION_START', compaction: { id: event.data.id, trigger: event.data.trigger, status: 'running' } })
+            } else {
+              dispatch({ type: 'COMPACTION_UPDATE', id: event.data.id, update: { status: event.data.status === 'completed' ? 'completed' : 'failed', compactedItems: event.data.compactedItems, keptItems: event.data.keptItems, reason: event.data.reason, error: event.data.error } })
+            }
             break
           case 'tool_call_start':
             dispatch({ type: 'TOOL_CALL_START', turnId, callId: event.data.id, name: event.data.name })
@@ -202,8 +249,9 @@ export function useAgentChat(
   }, [])
 
   return {
-    turns: state.turns,
+    entries: state.entries,
     isLoading: state.isLoading,
+    isCompacting: state.isCompacting,
     error: state.error,
     sendMessage,
     approveTool,

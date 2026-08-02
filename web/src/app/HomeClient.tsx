@@ -51,7 +51,7 @@ export default function HomeClient() {
   }, [activeProjectId])
 
   const {
-    turns,
+    entries,
     isLoading,
     error,
     sendMessage,
@@ -210,7 +210,7 @@ export default function HomeClient() {
         {error && <div className={styles.errorBanner}>{error}</div>}
 
         <MessageList
-          turns={turns}
+          entries={entries}
           isLoading={isLoading}
           onApprove={approveTool}
           onDeny={denyTool}

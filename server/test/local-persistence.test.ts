@@ -10,6 +10,7 @@ import { ApprovalService } from '../src/modules/approvals/approval.service.js'
 import { ConversationService } from '../src/modules/conversations/conversation.service.js'
 import { RunEventStore } from '../src/modules/events/run-event-store.js'
 import { PrismaAgentSession } from '../src/modules/history/agent-session-store.js'
+import { persistCompactionMessage } from '../src/modules/history/session-compaction.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
@@ -125,7 +126,14 @@ test('manual context compaction summarizes old session items and keeps recent it
   assert.equal(result.compactedItems, 4)
   assert.ok(result.estimatedTokensBefore >= 90)
   assert.equal(result.confirmedInputTokens, 95)
-  assert.equal(result.predictedInputTokens, 95 + result.estimatedTokensBefore - 10)
+ assert.equal(result.predictedInputTokens, 95 + result.estimatedTokensBefore - 10)
+
+  await persistCompactionMessage(sessionRecord.id, result)
+  const timeline = await conversations.getTimeline(turn.conversation.id)
+  const compactionMessage = timeline.messages.find((message) => message.role === 'system')
+  assert.equal(compactionMessage?.kind, 'context_compaction')
+  assert.equal(compactionMessage?.trigger, 'manual')
+  assert.equal(compactionMessage?.compactedItems, 4)
 
   const compacted = await session.getItems()
   assert.equal(compacted.length, 2)

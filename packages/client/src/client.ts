@@ -58,6 +58,23 @@ export class SuperagentClient {
     })
   }
 
+  async compactContext(conversationId: string): Promise<{
+    status: 'compacted' | 'skipped' | 'failed'
+    compactedItems: number
+    keptItems: number
+    reason?: string
+  }> {
+    const res = await this.fetch(`/api/conversations/${conversationId}/context/compact`, {
+      method: 'POST',
+    })
+    return (await res.json()) as {
+      status: 'compacted' | 'skipped' | 'failed'
+      compactedItems: number
+      keptItems: number
+      reason?: string
+    }
+  }
+
   async *startDraftTurn(
     projectId: string,
     req: StartTurnRequest,

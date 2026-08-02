@@ -18,3 +18,4 @@ export type {
   MessageContent,
 } from './types'
 export { TextMessage, ReasoningMessage } from './messages'
+export { ContextCompactionMessage } from './messages'

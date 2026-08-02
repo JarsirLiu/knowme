@@ -1,7 +1,7 @@
 // AssistantMessage — renders content + tool calls + approval bar based on status
 
 import type { AssistantMessage as AssistantMessageType } from '../types'
-import { TextMessage, ReasoningMessage } from '../messages'
+import { ContextCompactionMessage, TextMessage, ReasoningMessage } from '../messages'
 import { ToolCallList } from './ToolCallItem'
 import { ApprovalBar } from './ApprovalBar'
 import styles from './AssistantMessage.module.css'
@@ -30,6 +30,9 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
         <>
           <div className={styles.content}>
             {parts.map((part, i) => {
+              if (part.type === 'compaction') {
+                return <ContextCompactionMessage key={`compaction-${part.compaction.id}`} compaction={part.compaction} />
+              }
               if (part.type === 'tool') {
                 const toolCall = message.toolCalls.find((tool) => tool.id === part.callId)
                 return toolCall ? <ToolCallList key={`tool-${part.callId}`} toolCalls={[toolCall]} /> : null

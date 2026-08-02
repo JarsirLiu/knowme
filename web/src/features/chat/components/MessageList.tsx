@@ -1,18 +1,19 @@
 // MessageList — renders all turns, handles scroll
 
 import { useEffect, useRef } from 'react'
-import type { Turn as TurnType } from '../types'
+import type { ChatEntry } from '../types'
+import { ContextCompactionMessage } from '../messages'
 import { Turn } from './Turn'
 import styles from './MessageList.module.css'
 
 interface MessageListProps {
-  turns: TurnType[]
+  entries: ChatEntry[]
   isLoading: boolean
   onApprove: (callId: string) => void
   onDeny: (callId: string) => void
 }
 
-export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageListProps) {
+export function MessageList({ entries, isLoading, onApprove, onDeny }: MessageListProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
@@ -21,7 +22,7 @@ export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageList
     const list = listRef.current
     if (!list) return
     if (stickToBottomRef.current) list.scrollTop = list.scrollHeight
-  }, [turns])
+  }, [entries])
 
   return (
     <div
@@ -33,7 +34,7 @@ export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageList
         stickToBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120
       }}
     >
-      {turns.length === 0 && !isLoading ? (
+      {entries.length === 0 && !isLoading ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -45,13 +46,10 @@ export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageList
         </div>
       ) : (
         <div className={styles.turns}>
-          {turns.map((turn) => (
-            <Turn
-              key={turn.id}
-              turn={turn}
-              onApprove={onApprove}
-              onDeny={onDeny}
-            />
+          {entries.map((entry) => entry.type === 'turn' ? (
+            <Turn key={entry.turn.id} turn={entry.turn} onApprove={onApprove} onDeny={onDeny} />
+          ) : (
+            <ContextCompactionMessage key={entry.compaction.id} compaction={entry.compaction} />
           ))}
         </div>
       )}

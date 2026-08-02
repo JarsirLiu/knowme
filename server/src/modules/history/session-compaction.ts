@@ -22,6 +22,7 @@ export type SessionCompactionTrigger = 'auto' | 'manual'
 
 export interface SessionCompactionResult {
   status: 'compacted' | 'skipped' | 'failed'
+  trigger: SessionCompactionTrigger
   reason?: string
   beforeItems: number
   afterItems: number
@@ -34,6 +35,12 @@ export interface SessionCompactionResult {
   confirmedInputTokens?: number
   inputBudgetTokens: number
   recentTokenBudget: number
+}
+
+export interface CompactionObserver {
+  started?: (input: { id: string; trigger: SessionCompactionTrigger }) => Promise<void>
+  completed?: (input: { id: string; trigger: SessionCompactionTrigger; result: SessionCompactionResult }) => Promise<void>
+  failed?: (input: { id: string; trigger: SessionCompactionTrigger; error: string }) => Promise<void>
 }
 
 export class OpenAICompatibleContextSummarizer implements ContextSummarizer {
@@ -124,20 +131,20 @@ export async function compactSession(
     : estimatedTokensBefore
 
   if (!force && !options.enabled) {
-    return skipped('auto compaction disabled', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+    return skipped(trigger, 'auto compaction disabled', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
   if (!force && predictedInputTokens < budget.compactBefore) {
-    return skipped('context token budget not reached', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+    return skipped(trigger, 'context token budget not reached', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const selection = selectRecentTail(items, options.keepRecentTokens)
   if (!selection) {
-    return skipped('no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+    return skipped(trigger, 'no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const compactedItems = items.slice(0, selection.startIndex)
   if (compactedItems.length === 0) {
-    return skipped('no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+    return skipped(trigger, 'no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
   const summary = await options.summarizer.summarize({
@@ -155,6 +162,7 @@ export async function compactSession(
 
   return {
     status: 'compacted',
+    trigger,
     beforeItems: items.length,
     afterItems: replacement.length,
     compactedItems: compactedItems.length,
@@ -167,6 +175,40 @@ export async function compactSession(
     inputBudgetTokens: budget.inputBudgetTokens,
     recentTokenBudget: options.keepRecentTokens,
   }
+}
+
+export async function persistCompactionMessage(
+  sessionId: string,
+  result: SessionCompactionResult,
+) {
+  if (result.status !== 'compacted') return null
+
+  const session = await prisma.agentSession.findUnique({
+    where: { id: sessionId },
+    select: { conversationId: true },
+  })
+  if (!session) throw new Error(`Agent session not found: ${sessionId}`)
+
+  const payload = {
+    kind: 'context_compaction' as const,
+    trigger: result.trigger,
+    status: 'completed' as const,
+    compactedItems: result.compactedItems,
+    keptItems: result.keptItems,
+    estimatedTokensBefore: result.estimatedTokensBefore,
+    estimatedTokensAfter: result.estimatedTokensAfter,
+    predictedInputTokens: result.predictedInputTokens,
+    inputBudgetTokens: result.inputBudgetTokens,
+    summary: result.summary,
+  }
+
+  return prisma.message.create({
+    data: {
+      conversationId: session.conversationId,
+      role: 'system',
+      content: JSON.stringify(payload),
+    },
+  })
 }
 
 export async function replaceSessionItems(sessionId: string, items: AgentInputItem[]) {
@@ -353,6 +395,7 @@ function stringify(value: unknown): string {
 }
 
 function skipped(
+  trigger: SessionCompactionTrigger,
   reason: string,
   itemCount: number,
   estimatedTokensBefore: number,
@@ -362,6 +405,7 @@ function skipped(
 ): SessionCompactionResult {
   return {
     status: 'skipped',
+    trigger,
     reason,
     beforeItems: itemCount,
     afterItems: itemCount,

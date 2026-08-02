@@ -34,11 +34,22 @@ export interface ReasoningContent {
   text: string
 }
 
+export interface ContextCompaction {
+  id: string
+  trigger: 'auto' | 'manual'
+  status: 'running' | 'completed' | 'failed'
+  compactedItems?: number
+  keptItems?: number
+  reason?: string
+  error?: string
+}
+
 export type MessageContent = TextContent | ReasoningContent
 
 export type AssistantPart =
   | { type: 'content'; content: MessageContent }
   | { type: 'tool'; callId: string }
+  | { type: 'compaction'; compaction: ContextCompaction }
 
 export interface AssistantMessage {
   id: string
@@ -62,8 +73,13 @@ export interface Turn {
   assistantMessage: AssistantMessage
 }
 
+export type ChatEntry =
+  | { type: 'turn'; turn: Turn }
+  | { type: 'compaction'; compaction: ContextCompaction }
+
 export interface ChatState {
-  turns: Turn[]
+  entries: ChatEntry[]
   isLoading: boolean
+  isCompacting: boolean
   error: string | null
 }

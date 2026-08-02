@@ -1,0 +1,33 @@
+.message {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: min(100%, 720px);
+  margin: 8px 0 18px;
+  color: #68757c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid #cbd5da;
+  border-radius: 50%;
+  color: #607078;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.running .icon { border-color: #9caeb7; }
+.failed { color: #a45d5d; }
+.failed .icon { border-color: #d6a2a2; color: #a45d5d; }
+.copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.title { color: #56636b; font-weight: 600; }
+.detail { color: #89949a; overflow-wrap: anywhere; }
+.spinner { width: 9px; height: 9px; border: 1.5px solid #aab7bd; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

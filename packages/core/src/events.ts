@@ -53,6 +53,19 @@ export interface ConversationCreatedEvent {
   data: { conversationId: string; runId: string; title: string }
 }
 
+export interface ContextCompactionEvent {
+  type: 'context_compaction'
+  data: {
+    id: string
+    trigger: 'auto' | 'manual'
+    status: 'started' | 'completed' | 'failed'
+    compactedItems?: number
+    keptItems?: number
+    reason?: string
+    error?: string
+  }
+}
+
 export interface SessionCreatedEvent {
   type: 'session.created'
   data: { id: string; name: string }
@@ -75,5 +88,6 @@ export type SSEEvent =
   | ErrorEvent
   | StatusEvent
   | ConversationCreatedEvent
+  | ContextCompactionEvent
   | SessionCreatedEvent
   | SessionUpdatedEvent
