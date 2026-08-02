@@ -2,13 +2,15 @@
 
 .list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 20px 0 100px;
+  padding: 30px 0 132px;
 }
 
 .turns {
   display: flex;
   flex-direction: column;
+  min-height: 100%;
 }
 
 .empty {
@@ -19,7 +21,7 @@
   height: 100%;
   color: var(--color-muted-soft);
   gap: 12px;
-  padding-left: 48px;
+  padding: 0 24px;
 }
 
 .emptyIcon {

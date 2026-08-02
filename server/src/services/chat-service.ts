@@ -1,160 +1,293 @@
 import type { FastifyReply } from 'fastify'
-import { run, user, assistant, system, type AgentInputItem, type RunStreamEvent } from '@openai/agents'
+import { run, RunState, type Agent, type RunStreamEvent } from '@openai/agents'
 import { createCodingAgent } from '@superagent/agent'
 import { setupSSEHeaders, sendSSE } from '../utils/sse.js'
 import { prisma } from '../db/client.js'
+import { ConversationService } from './conversation-service.js'
+import { PrismaAgentSession } from './durable-session.js'
 import { ToolApprovalService } from './tool-approval.js'
 
+type TurnTarget =
+  | { projectId: string; conversationId?: undefined }
+  | { conversationId: string; projectId?: undefined }
+
 export class ChatService {
-  private approvalService: ToolApprovalService
+  constructor(
+    private readonly conversationService: ConversationService,
+    private readonly approvalService: ToolApprovalService,
+  ) {}
 
-  constructor(approvalService: ToolApprovalService) {
-    this.approvalService = approvalService
-  }
-
-  async handleChat(sessionId: string, message: string, reply: FastifyReply) {
+  async handleTurn(
+    target: TurnTarget,
+    message: string,
+    clientMessageId: string,
+    reply: FastifyReply,
+  ) {
     setupSSEHeaders(reply)
+    const abortController = new AbortController()
+    const handleClose = () => {
+      if (!reply.raw.writableEnded) abortController.abort()
+    }
+    reply.raw.once('close', handleClose)
 
     try {
-      const session = await prisma.session.findUnique({ where: { id: sessionId } })
-      if (!session) {
-        sendSSE(reply, { type: 'error', data: { message: `Session not found: ${sessionId}` } })
-        reply.raw.end()
-        return
-      }
+      if (!message.trim()) throw new Error('Message cannot be empty')
+      const turn = target.projectId
+        ? await this.conversationService.startTurn({
+            projectId: target.projectId,
+            message,
+            clientMessageId,
+          })
+        : await this.conversationService.continueTurn({
+            conversationId: target.conversationId!,
+            message,
+            clientMessageId,
+          })
 
-      process.env.SUPERAGENT_AUTO_APPROVE_SHELL = 'true'
-      const { agent, cfg } = createCodingAgent()
-      console.log(`[CHAT] Model: ${cfg.model}, BaseURL: ${cfg.baseURL}`)
-
-      const history = await prisma.message.findMany({
-        where: { sessionId },
-        orderBy: { createdAt: 'asc' },
-      })
-
-      const input: AgentInputItem[] = []
-      for (const msg of history) {
-        const role = msg.role as 'user' | 'assistant' | 'system'
-        const content = msg.content
-        if (role === 'user') input.push(user(content))
-        else if (role === 'assistant') input.push(assistant(content))
-        else if (role === 'system') input.push(system(content))
-      }
-      input.push(user(message))
-
-      await prisma.message.create({
-        data: { sessionId, role: 'user', content: message },
-      })
-
-      sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
-
-      const result = await run(agent, input, {
-        maxTurns: cfg.maxTurns,
-        stream: true,
-      }) as AsyncIterable<RunStreamEvent>
-
-      let fullResponse = ''
-      let fullReasoning = ''
-
-      for await (const event of result) {
-        if (event.type === 'raw_model_stream_event') {
-          const data = (event as { data: { type: string; delta?: string; itemId?: string } }).data
-
-          if (data.type === 'output_text_delta' && data.delta) {
-            fullResponse += data.delta
-            sendSSE(reply, { type: 'text_delta', data: { text: data.delta } })
-          }
-
-          if (data.type === 'model') {
-            const modelEvent = (event as { data: { event?: { choices?: Array<{ delta?: { reasoning?: string } }> } } }).data
-            const reasoningDelta = modelEvent.event?.choices?.[0]?.delta?.reasoning
-            if (reasoningDelta) {
-              fullReasoning += reasoningDelta
-              sendSSE(reply, { type: 'reasoning_delta', data: { text: reasoningDelta } })
-            }
-          }
-        }
-
-        if (event.type === 'run_item_stream_event') {
-          const item = (event as { item?: { type: string; rawItem?: unknown } }).item
-          if (!item) continue
-
-          if (event.name === 'tool_called' && item.type === 'tool_call_item') {
-            const tc = item as unknown as { rawItem: { callId: string; name: string } }
-            sendSSE(reply, {
-              type: 'tool_call_start',
-              data: { id: tc.rawItem.callId, name: tc.rawItem.name },
-            })
-            await this.approvalService.saveToolCall({
-              id: tc.rawItem.callId,
-              sessionId,
-              name: tc.rawItem.name,
-              args: '{}',
-              status: 'running',
-            })
-          }
-
-          if (event.name === 'tool_approval_requested' && item.type === 'tool_approval_item') {
-            const approvalItem = item as unknown as {
-              rawItem: { callId?: string; id?: string; name?: string; arguments?: string }
-              name?: string
-              arguments?: string
-            }
-            const callId = approvalItem.rawItem.callId || approvalItem.rawItem.id || 'unknown'
-            const name = approvalItem.name || approvalItem.rawItem.name || 'unknown'
-            const argsStr = approvalItem.arguments || '{}'
-            let args: unknown
-            try { args = JSON.parse(argsStr) } catch { args = argsStr }
-
-            sendSSE(reply, {
-              type: 'tool_call_awaiting_approval',
-              data: { id: callId, name, args },
-            })
-
-            await this.approvalService.updateToolCall(callId, { status: 'awaiting_approval' })
-
-            const approved = await this.approvalService.requestApproval(callId)
-            if (!approved) {
-              sendSSE(reply, { type: 'tool_call_denied', data: { id: callId } })
-              await this.approvalService.updateToolCall(callId, { status: 'denied' })
-            }
-          }
-
-          if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
-            const output = item as unknown as { rawItem: { callId: string; output: unknown } }
-            sendSSE(reply, {
-              type: 'tool_call_completed',
-              data: { id: output.rawItem.callId, result: output.rawItem.output },
-            })
-            await this.approvalService.updateToolCall(output.rawItem.callId, {
-              status: 'completed',
-              result: output.rawItem.output,
-            })
-          }
-        }
-      }
-
-      if (fullResponse) {
-        await prisma.message.create({
-          data: { sessionId, role: 'assistant', content: fullResponse },
+      const { conversation, run: agentRun, created: isNew } = turn
+      if (target.projectId) {
+        sendSSE(reply, {
+          type: 'conversation_created',
+          data: {
+            conversationId: conversation.id,
+            runId: agentRun.id,
+            title: conversation.title,
+          },
         })
       }
 
-      sendSSE(reply, { type: 'status', data: { status: 'idle' } })
-      reply.raw.end()
-    } catch (err) {
-      console.error('[CHAT ERROR] type:', typeof err)
-      console.error('[CHAT ERROR] message:', err instanceof Error ? err.message : String(err))
-      console.error('[CHAT ERROR] stack:', err instanceof Error ? err.stack : 'N/A')
-      if (err && typeof err === 'object') {
-        const e = err as Record<string, unknown>
-        if ('status' in e) console.error('[CHAT ERROR] status:', e.status)
-        if ('error' in e) console.error('[CHAT ERROR] provider error:', JSON.stringify(e.error))
-        if ('response' in e) console.error('[CHAT ERROR] response:', JSON.stringify(e.response))
+      if (!isNew) {
+        await this.replayExistingRun(agentRun, reply)
+        return
       }
-      const msg = err instanceof Error ? err.message : String(err)
-      sendSSE(reply, { type: 'error', data: { message: msg } })
+
+      await this.executeRun(conversation.id, agentRun.id, reply, abortController.signal)
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error)
+      if (!abortController.signal.aborted) {
+        sendSSE(reply, { type: 'error', data: { message: messageText } })
+      }
+    } finally {
+      reply.raw.off('close', handleClose)
       reply.raw.end()
     }
+  }
+
+  private async replayExistingRun(agentRun: {
+    status: string
+    output: string | null
+    error: string | null
+  }, reply: FastifyReply) {
+    if (agentRun.status === 'completed') {
+      if (agentRun.output) sendSSE(reply, { type: 'text_delta', data: { text: agentRun.output } })
+      sendSSE(reply, { type: 'status', data: { status: 'idle' } })
+      return
+    }
+
+    if (agentRun.status === 'failed') {
+      sendSSE(reply, { type: 'error', data: { message: agentRun.error ?? 'Agent run failed' } })
+      return
+    }
+
+    sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
+    sendSSE(reply, {
+      type: 'error',
+      data: { message: `This request is already ${agentRun.status}; wait for the active run to finish.` },
+    })
+  }
+
+  private async executeRun(
+    conversationId: string,
+    runId: string,
+    reply: FastifyReply,
+    signal: AbortSignal,
+  ) {
+    const conversation = await this.conversationService.get(conversationId)
+    const project = await prisma.project.findUnique({ where: { id: conversation.projectId } })
+    if (!project) throw new Error(`Project not found: ${conversation.projectId}`)
+
+    const { agent, cfg } = createCodingAgent({ workspace: project.rootPath })
+    const sessionId = await this.conversationService.getSessionId(conversationId)
+    const session = new PrismaAgentSession(sessionId)
+
+    await prisma.agentRun.update({
+      where: { id: runId },
+      data: { status: 'running', startedAt: new Date() },
+    })
+    await this.appendEvent(runId, 'run.started', { conversationId })
+    sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
+
+    try {
+      const stream = await run(agent, await this.getRunInput(agent, runId), {
+        maxTurns: cfg.maxTurns,
+        stream: true,
+        session,
+        signal,
+      })
+
+      const completedStream = await this.drainStream(agent, stream, runId, reply, session, cfg.maxTurns, signal)
+      const finalOutput = typeof completedStream.finalOutput === 'string'
+        ? completedStream.finalOutput
+        : completedStream.finalOutput == null
+          ? ''
+          : JSON.stringify(completedStream.finalOutput)
+
+      if (finalOutput) {
+        await prisma.message.create({
+          data: {
+            conversationId,
+            runId,
+            role: 'assistant',
+            content: finalOutput,
+          },
+        })
+      }
+
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      })
+
+      await prisma.agentRun.update({
+        where: { id: runId },
+        data: {
+          status: 'completed',
+          output: finalOutput || null,
+          state: null,
+          finishedAt: new Date(),
+        },
+      })
+      await this.appendEvent(runId, 'run.completed', { output: finalOutput })
+      sendSSE(reply, { type: 'status', data: { status: 'idle' } })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await prisma.agentRun.update({
+        where: { id: runId },
+        data: {
+          status: signal.aborted ? 'cancelled' : 'failed',
+          error: signal.aborted ? 'Run cancelled by client' : message,
+          finishedAt: new Date(),
+        },
+      })
+      await this.appendEvent(runId, signal.aborted ? 'run.cancelled' : 'run.failed', {
+        error: signal.aborted ? 'Run cancelled by client' : message,
+      })
+      if (!signal.aborted) sendSSE(reply, { type: 'error', data: { message } })
+    }
+  }
+
+  private async getRunInput(agent: Agent, runId: string): Promise<any> {
+    const agentRun = await prisma.agentRun.findUnique({ where: { id: runId } })
+    if (!agentRun) throw new Error(`Run not found: ${runId}`)
+    if (agentRun.state) return RunState.fromString(agent, agentRun.state)
+    return agentRun.input
+  }
+
+  private async drainStream(
+    agent: Agent,
+    stream: any,
+    runId: string,
+    reply: FastifyReply,
+    session: PrismaAgentSession,
+    maxTurns: number,
+    signal: AbortSignal,
+  ): Promise<any> {
+    for await (const event of stream as AsyncIterable<RunStreamEvent>) {
+      await this.handleStreamEvent(runId, event, reply)
+    }
+
+    await stream.completed
+    const interruptions = stream.interruptions ?? []
+    if (interruptions.length === 0) return stream
+
+    await prisma.agentRun.update({
+      where: { id: runId },
+      data: { status: 'waiting_approval', state: stream.state.toString() },
+    })
+
+    for (const interruption of interruptions) {
+      const rawItem = (interruption as { rawItem?: unknown }).rawItem as Record<string, unknown> | undefined
+      const callId = String(rawItem?.callId ?? rawItem?.id ?? 'unknown')
+      const name = String(rawItem?.name ?? 'unknown')
+      const argumentsValue = rawItem?.arguments ?? '{}'
+      let args: unknown = argumentsValue
+      if (typeof argumentsValue === 'string') {
+        try { args = JSON.parse(argumentsValue) } catch { args = argumentsValue }
+      }
+
+      await this.approvalService.createApproval({
+        runId,
+        toolCallId: callId,
+        toolName: name,
+        arguments: args,
+      })
+      await this.appendEvent(runId, 'approval.requested', { id: callId, name, args })
+      sendSSE(reply, {
+        type: 'tool_call_awaiting_approval',
+        data: { id: callId, name, args },
+      })
+
+      const approval = await this.approvalService.waitForApproval(callId, runId)
+      if (approval) stream.state.approve(interruption)
+      else stream.state.reject(interruption)
+    }
+
+    await prisma.agentRun.update({
+      where: { id: runId },
+      data: { status: 'running', state: stream.state.toString() },
+    })
+
+    const resumed = await run(agent, stream.state, {
+      maxTurns,
+      stream: true,
+      session,
+      signal,
+    })
+    return this.drainStream(agent, resumed, runId, reply, session, maxTurns, signal)
+  }
+
+  private async handleStreamEvent(runId: string, event: RunStreamEvent, reply: FastifyReply) {
+    if (event.type === 'raw_model_stream_event') {
+      const data = (event as { data?: { type?: string; delta?: string } }).data
+      if (data?.type === 'output_text_delta' && data.delta) {
+        await this.appendEvent(runId, 'message.delta', { text: data.delta })
+        sendSSE(reply, { type: 'text_delta', data: { text: data.delta } })
+      }
+      return
+    }
+
+    if (event.type !== 'run_item_stream_event') return
+    const item = (event as { item?: { type?: string; rawItem?: unknown } }).item
+    if (!item) return
+    const raw = (item.rawItem ?? {}) as Record<string, unknown>
+
+    if (event.name === 'tool_called' && item.type === 'tool_call_item') {
+      const id = String(raw.callId ?? raw.id ?? 'unknown')
+      const name = String(raw.name ?? 'unknown')
+      await this.appendEvent(runId, 'tool.called', { id, name })
+      sendSSE(reply, { type: 'tool_call_start', data: { id, name } })
+    }
+
+    if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
+      const id = String(raw.callId ?? raw.id ?? 'unknown')
+      const result = raw.output
+      await this.appendEvent(runId, 'tool.output', { id, result })
+      sendSSE(reply, { type: 'tool_call_completed', data: { id, result } })
+    }
+  }
+
+  private async appendEvent(runId: string, type: string, payload: unknown) {
+    const last = await prisma.runEvent.findFirst({
+      where: { runId },
+      orderBy: { sequence: 'desc' },
+    })
+    await prisma.runEvent.create({
+      data: {
+        runId,
+        sequence: (last?.sequence ?? 0) + 1,
+        type,
+        payload: JSON.stringify(payload),
+      },
+    })
   }
 }

@@ -1,28 +1,53 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { Conversation, Project } from '@superagent/core'
 import { Sidebar } from '@/components/Sidebar/Sidebar'
 import { Header, MessageList, InputBar, useAgentChat } from '@/features/chat'
+import type { ActiveConversation } from '@/features/chat/hooks/useAgentChat'
 import { client } from '@/api/client'
+import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import styles from './HomeClient.module.css'
 
-interface ChatSession {
-  id: string
-  name: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface ProjectGroup {
-  name: string
-  icon: string
-  sessions: { id: string; title: string; createdAt: number; updatedAt: number }[]
+function createDraft(projectId: string): ActiveConversation {
+  return {
+    kind: 'draft',
+    draftId: crypto.randomUUID(),
+    projectId,
+    title: '新任务',
+  }
 }
 
 export default function HomeClient() {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [currentId, setCurrentId] = useState<string>('')
-  const [currentTitle, setCurrentTitle] = useState<string>('New Session')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [conversationsByProject, setConversationsByProject] = useState<Record<string, Conversation[]>>({})
+  const [activeProjectId, setActiveProjectId] = useState('')
+  const [active, setActive] = useState<ActiveConversation | null>(null)
   const [input, setInput] = useState('')
   const [initialized, setInitialized] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [projectModalOpen, setProjectModalOpen] = useState(false)
+  const [creatingProject, setCreatingProject] = useState(false)
+
+  const handleConversationCreated = useCallback((data: { conversationId: string; title: string }) => {
+    setActive((current) => {
+      if (!current || current.kind !== 'draft') return current
+      return { ...current, conversationId: data.conversationId, title: data.title }
+    })
+    setConversationsByProject((current) => {
+      if (!activeProjectId) return current
+      const existing = current[activeProjectId] ?? []
+      if (existing.some((conversation) => conversation.id === data.conversationId)) return current
+      const conversation: Conversation = {
+        id: data.conversationId,
+        projectId: activeProjectId,
+        title: data.title,
+        status: 'active',
+        agentProfile: 'coding',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      return { ...current, [activeProjectId]: [conversation, ...existing] }
+    })
+  }, [activeProjectId])
 
   const {
     turns,
@@ -32,85 +57,145 @@ export default function HomeClient() {
     approveTool,
     denyTool,
     stop,
-  } = useAgentChat(currentId)
-
-  const projects: ProjectGroup[] = [
-    { name: 'superagent', icon: '📁', sessions: [] },
-  ]
+  } = useAgentChat(active, handleConversationCreated)
 
   useEffect(() => {
-    client.listSessions().then((list) => {
-      if (list.length > 0) {
-        setCurrentId(list[0].id)
-        setCurrentTitle(list[0].name)
-        setSessions(list)
-        setInitialized(true)
-      } else {
-        client.createSession().then((s) => {
-          setCurrentId(s.id)
-          setCurrentTitle(s.name)
-          setSessions([s])
-          setInitialized(true)
-        })
+    let cancelled = false
+    async function loadWorkspace() {
+      const nextProjects = await client.listProjects()
+      const pairs = await Promise.all(
+        nextProjects.map(async (project) => [project.id, await client.listConversations(project.id)] as const),
+      )
+      if (cancelled) return
+
+      const nextConversations = Object.fromEntries(pairs)
+      const firstProject = nextProjects[0]
+      const firstConversation = firstProject ? nextConversations[firstProject.id]?.[0] : undefined
+      setProjects(nextProjects)
+      setConversationsByProject(nextConversations)
+      if (firstProject) {
+        setActiveProjectId(firstProject.id)
+        setActive(firstConversation
+          ? { kind: 'persisted', conversationId: firstConversation.id, projectId: firstProject.id }
+          : createDraft(firstProject.id))
       }
+      setInitialized(true)
+    }
+
+    loadWorkspace().catch(() => {
+      if (!cancelled) setInitialized(true)
     })
+    return () => { cancelled = true }
   }, [])
 
-  const handleNew = useCallback(async () => {
-    const s = await client.createSession()
-    setCurrentId(s.id)
-    setCurrentTitle(s.name)
-    setSessions((prev) => [s, ...prev])
+  const handleNew = useCallback((projectId: string) => {
+    if (!projectId || isLoading) return
+    setActiveProjectId(projectId)
+    setActive(createDraft(projectId))
+    setInput('')
+    setMobileNavOpen(false)
+  }, [activeProjectId, isLoading])
+
+  const handleNewProject = useCallback(() => {
+    if (isLoading) return
+    setProjectModalOpen(true)
+  }, [isLoading])
+
+  const handleCreateProject = useCallback(async ({ name, rootPath }: { name: string; rootPath: string }) => {
+    setCreatingProject(true)
+    try {
+      const project = await client.createProject({ name, rootPath })
+      setProjects((current) => [project, ...current])
+      setConversationsByProject((current) => ({ ...current, [project.id]: [] }))
+      setActiveProjectId(project.id)
+      setActive(createDraft(project.id))
+      setMobileNavOpen(false)
+      setProjectModalOpen(false)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCreatingProject(false)
+    }
   }, [])
 
-  const handleSelect = useCallback((id: string) => {
-    setCurrentId(id)
-    const session = sessions.find((s) => s.id === id)
-    if (session) setCurrentTitle(session.name)
-  }, [sessions])
+  const handleSelectProject = useCallback((projectId: string) => {
+    if (isLoading) return
+    setActiveProjectId(projectId)
+    const firstConversation = conversationsByProject[projectId]?.[0]
+    setActive(firstConversation
+      ? { kind: 'persisted', conversationId: firstConversation.id, projectId }
+      : createDraft(projectId))
+    setInput('')
+    setMobileNavOpen(false)
+  }, [conversationsByProject, isLoading])
+
+  const handleSelectConversation = useCallback((conversationId: string, projectId: string) => {
+    if (isLoading) return
+    setActiveProjectId(projectId)
+    setActive({ kind: 'persisted', conversationId, projectId })
+    setInput('')
+    setMobileNavOpen(false)
+  }, [isLoading])
 
   const handleSend = useCallback(() => {
-    if (!input.trim()) return
-    sendMessage(input)
+    if (!input.trim() || isLoading) return
+    const message = input
     setInput('')
-  }, [input, sendMessage])
+    void sendMessage(message)
+  }, [input, isLoading, sendMessage])
 
-  if (!initialized) return null
+  const activeTitle = active?.kind === 'persisted'
+    ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
+    : active?.title ?? '新任务'
+
+  if (!initialized) {
+    return <div className={styles.loadingScreen}>正在加载本地工作区…</div>
+  }
 
   return (
     <div className={styles.appLayout}>
+      {mobileNavOpen && <button className={styles.mobileBackdrop} type="button" aria-label="关闭项目导航" onClick={() => setMobileNavOpen(false)} />}
       <Sidebar
         projects={projects}
-        sessions={sessions.map((s) => ({ id: s.id, title: s.name, createdAt: 0, updatedAt: 0 }))}
-        currentId={currentId}
+        conversationsByProject={conversationsByProject}
+        activeProjectId={activeProjectId}
+        active={active}
         isLoading={isLoading}
-        onSelect={handleSelect}
+        mobileOpen={mobileNavOpen}
+        onSelectProject={handleSelectProject}
+        onSelectConversation={handleSelectConversation}
         onNew={handleNew}
+        onNewProject={handleNewProject}
       />
-      <div className={styles.mainPane}>
-        <div className={styles.chatView}>
-          <Header title={currentTitle} onNew={handleNew} />
 
-          {error ? (
-            <div className={styles.errorBanner}>错误：{error}</div>
-          ) : null}
+      <main className={styles.mainPane}>
+        <Header title={activeTitle} onOpenNavigation={() => setMobileNavOpen(true)} />
 
-          <MessageList
-            turns={turns}
-            isLoading={isLoading}
-            onApprove={approveTool}
-            onDeny={denyTool}
-          />
+        {error && <div className={styles.errorBanner}>{error}</div>}
 
-          <InputBar
-            value={input}
-            onChange={setInput}
-            onSend={handleSend}
-            onStop={stop}
-            isLoading={isLoading}
-          />
-        </div>
-      </div>
+        <MessageList
+          turns={turns}
+          isLoading={isLoading}
+          onApprove={approveTool}
+          onDeny={denyTool}
+        />
+
+        <InputBar
+          value={input}
+          onChange={setInput}
+          onSend={handleSend}
+          onStop={stop}
+          isLoading={isLoading}
+          placeholder="描述你要完成的任务…"
+        />
+      </main>
+
+      <ProjectModal
+        open={projectModalOpen}
+        isSubmitting={creatingProject}
+        onClose={() => setProjectModalOpen(false)}
+        onSubmit={handleCreateProject}
+      />
     </div>
   )
 }

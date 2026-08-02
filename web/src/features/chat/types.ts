@@ -36,12 +36,17 @@ export interface ReasoningContent {
 
 export type MessageContent = TextContent | ReasoningContent
 
+export type AssistantPart =
+  | { type: 'content'; content: MessageContent }
+  | { type: 'tool'; callId: string }
+
 export interface AssistantMessage {
   id: string
   role: 'assistant'
   status: AssistantMessageStatus
   content: MessageContent[]
   toolCalls: ToolCall[]
+  parts: AssistantPart[]
 }
 
 export interface UserMessage {

@@ -13,14 +13,26 @@ interface MessageListProps {
 }
 
 export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageListProps) {
+  const listRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const stickToBottomRef = useRef(true)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const list = listRef.current
+    if (!list) return
+    if (stickToBottomRef.current) list.scrollTop = list.scrollHeight
   }, [turns])
 
   return (
-    <div className={styles.list}>
+    <div
+      ref={listRef}
+      className={styles.list}
+      onScroll={() => {
+        const list = listRef.current
+        if (!list) return
+        stickToBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120
+      }}
+    >
       {turns.length === 0 && !isLoading ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>
@@ -44,7 +56,7 @@ export function MessageList({ turns, isLoading, onApprove, onDeny }: MessageList
         </div>
       )}
 
-      <div ref={bottomRef} />
+      <div ref={bottomRef} aria-hidden="true" />
     </div>
   )
 }

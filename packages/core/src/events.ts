@@ -48,6 +48,11 @@ export interface StatusEvent {
   data: { status: 'thinking' | 'idle' | 'error' }
 }
 
+export interface ConversationCreatedEvent {
+  type: 'conversation_created'
+  data: { conversationId: string; runId: string; title: string }
+}
+
 export interface SessionCreatedEvent {
   type: 'session.created'
   data: { id: string; name: string }
@@ -69,5 +74,6 @@ export type SSEEvent =
   | ToolCallFailedEvent
   | ErrorEvent
   | StatusEvent
+  | ConversationCreatedEvent
   | SessionCreatedEvent
   | SessionUpdatedEvent

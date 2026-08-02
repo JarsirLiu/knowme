@@ -1,40 +1,42 @@
 .inputBarWrap {
   position: absolute;
   left: 50%;
-  bottom: 16px;
+  bottom: 14px;
   transform: translateX(-50%);
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 36px;
   box-sizing: border-box;
   z-index: 5;
 }
 
 .inputBar {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  padding: 8px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--color-border);
-  border-radius: 24px;
-  box-shadow: var(--shadow-inputbar);
+  min-height: 124px;
+  padding: 12px 14px 10px;
+  background: #fff;
+  border: 1px solid #dfe4e7;
+  border-radius: 22px;
+  box-shadow: 0 6px 22px rgba(31, 43, 51, .08), 0 1px 3px rgba(31, 43, 51, .04);
   width: 100%;
-  max-width: 760px;
+  max-width: 900px;
   transition: border-color 0.15s;
 }
 
-.inputBarFocused { border-color: #c5c5c5; }
+.inputBarFocused { border-color: #b7c2c8; box-shadow: 0 7px 26px rgba(31, 43, 51, .1); }
 
 .plusButton {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--bg-primary);
-  color: var(--color-muted);
+  border: 0;
+  background: transparent;
+  color: #657179;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,23 +45,31 @@
   transition: background 0.15s;
 }
 
-.plusButton:hover { background: var(--color-bg-hover); }
+.plusButton:hover { background: #eef2f4; }
 
 .inputTextarea {
   flex: 1;
+  width: 100%;
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-primary);
   resize: none;
   line-height: 1.5;
-  padding: 6px 4px;
+  padding: 4px 2px;
   font-family: var(--font-sans);
   max-height: 200px;
 }
 
 .inputTextarea::placeholder { color: var(--color-muted-soft); }
+
+.inputFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+}
 
 .inputBarRight {
   display: flex;
@@ -98,8 +108,8 @@
 }
 
 .sendButton {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: none;
   display: flex;
@@ -111,18 +121,24 @@
 }
 
 .sendButtonSend {
-  background: var(--text-primary);
-  color: var(--bg-primary);
+  background: #20262b;
+  color: #fff;
 }
 
 .sendButtonDisabled {
-  background: var(--color-bg-active);
+  background: #e1e3e4;
   color: var(--color-muted-soft);
   cursor: not-allowed;
 }
 
 .sendButtonStop {
-  background: #000;
+  background: #202428;
   color: #fff;
   border-radius: 6px;
+}
+
+@media (max-width: 760px) {
+  .inputBarWrap { bottom: 10px; padding: 0 12px; }
+  .inputBar { min-height: 124px; border-radius: 22px; }
+  .inputTextarea { font-size: 16px; }
 }

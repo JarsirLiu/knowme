@@ -1,0 +1,45 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 29, 36, .22);
+}
+
+.modal {
+  width: min(100%, 560px);
+  padding: 28px 30px 22px;
+  border: 1px solid #e0e5e8;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(27, 36, 44, .18);
+}
+
+.modalHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.modalHeader h2 { color: #20252a; font-size: 23px; line-height: 1.2; font-weight: 700; }
+.closeButton { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #858d94; cursor: pointer; }
+.closeButton:hover { background: #f1f3f4; color: #252a2f; }
+.nameField, .pathField { display: flex; align-items: center; }
+.nameField { height: 58px; border: 1px solid #b9d7ff; border-radius: 15px; box-shadow: 0 0 0 3px rgba(73, 146, 255, .08); overflow: hidden; }
+.folderIcon { display: grid; place-items: center; width: 58px; height: 100%; border-right: 1px solid #edf0f2; color: #58636c; }
+.nameField input, .pathField input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #20252a; font: inherit; font-size: 15px; }
+.nameField input { padding: 0 16px; }
+.nameField input::placeholder, .pathField input::placeholder { color: #9aa1a7; }
+.pathLabel { display: block; margin-top: 22px; color: #2f353a; font-size: 14px; font-weight: 650; }
+.pathField { gap: 10px; height: 86px; margin-top: 9px; padding: 0 17px; border: 1px solid #e1e5e8; border-radius: 14px; color: #889198; transition: border-color .15s, box-shadow .15s; }
+.pathField:focus-within { border-color: #9bc5ff; box-shadow: 0 0 0 3px rgba(73, 146, 255, .08); }
+.pathField input { font-size: 14px; }
+.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.cancelButton, .submitButton { min-width: 74px; height: 40px; padding: 0 17px; border-radius: 9px; font: inherit; font-size: 14px; cursor: pointer; }
+.cancelButton { border: 0; background: transparent; color: #7e868d; }
+.cancelButton:hover { background: #f2f4f5; color: #30363b; }
+.submitButton { border: 1px solid #1c2024; background: #1c2024; color: #fff; font-weight: 650; }
+.submitButton:hover:not(:disabled) { background: #31373c; }
+.submitButton:disabled { cursor: not-allowed; opacity: .38; }
+
+@media (max-width: 560px) {
+  .modal { padding: 23px 20px 18px; border-radius: 16px; }
+  .modalHeader h2 { font-size: 21px; }
+}

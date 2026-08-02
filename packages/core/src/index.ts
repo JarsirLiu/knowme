@@ -10,20 +10,23 @@ export type {
   ToolCallFailedEvent,
   ErrorEvent,
   StatusEvent,
+  ConversationCreatedEvent,
   SessionCreatedEvent,
   SessionUpdatedEvent,
 } from './events.js'
 export type {
-  CreateSessionRequest,
-  ChatRequest,
+  CreateProjectRequest,
+  StartTurnRequest,
   ApproveToolRequest,
   DenyToolRequest,
   RegisterDeviceRequest,
 } from './requests.js'
 export type {
-  SessionResponse,
-  SessionListResponse,
-  MessageListResponse,
+  ProjectResponse,
+  ProjectListResponse,
+  ConversationResponse,
+  ConversationListResponse,
+  ConversationTimelineResponse,
   DeviceResponse,
   DeviceListResponse,
 } from './responses.js'

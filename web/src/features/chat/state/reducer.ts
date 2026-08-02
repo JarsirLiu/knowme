@@ -8,9 +8,11 @@ import type {
   ToolCall,
   ToolCallStatus,
   MessageContent,
+  AssistantPart,
 } from '../types'
 
 export type ChatAction =
+  | { type: 'LOAD_TURNS'; turns: Turn[] }
   | { type: 'TURN_START'; userId: string; userText: string; turnId: string }
   | { type: 'CONTENT_APPEND'; turnId: string; content: MessageContent }
   | { type: 'TOOL_CALL_START'; turnId: string; callId: string; name: string }
@@ -18,6 +20,7 @@ export type ChatAction =
   | { type: 'TOOL_CALL_STATUS'; turnId: string; callId: string; status: ToolCallStatus; result?: unknown; error?: string }
   | { type: 'MSG_STATUS'; turnId: string; status: AssistantMessage['status'] }
   | { type: 'TURN_END' }
+  | { type: 'CANCEL' }
   | { type: 'ERROR'; message: string }
   | { type: 'RESET' }
 
@@ -25,14 +28,19 @@ const MAX_CONTENT_LEN = 100_000
 
 function appendContent(msg: AssistantMessage, content: MessageContent): AssistantMessage {
   const last = msg.content[msg.content.length - 1]
+  const lastPart = msg.parts[msg.parts.length - 1]
   if (content.type === 'text' && last?.type === 'text') {
     const combined = last.text + content.text
     const trimmed = combined.length > MAX_CONTENT_LEN
       ? combined.slice(0, MAX_CONTENT_LEN) + '\n... [truncated]'
       : combined
+    const nextContent = { type: 'text' as const, text: trimmed }
     return {
       ...msg,
-      content: [...msg.content.slice(0, -1), { type: 'text', text: trimmed }],
+      content: [...msg.content.slice(0, -1), nextContent],
+      parts: lastPart?.type === 'content' && lastPart.content.type === 'text'
+        ? [...msg.parts.slice(0, -1), { type: 'content', content: nextContent }]
+        : [...msg.parts, { type: 'content', content: nextContent }],
     }
   }
   if (content.type === 'reasoning' && last?.type === 'reasoning') {
@@ -40,12 +48,20 @@ function appendContent(msg: AssistantMessage, content: MessageContent): Assistan
     const trimmed = combined.length > MAX_CONTENT_LEN
       ? combined.slice(0, MAX_CONTENT_LEN) + '\n... [truncated]'
       : combined
+    const nextContent = { type: 'reasoning' as const, text: trimmed }
     return {
       ...msg,
-      content: [...msg.content.slice(0, -1), { type: 'reasoning', text: trimmed }],
+      content: [...msg.content.slice(0, -1), nextContent],
+      parts: lastPart?.type === 'content' && lastPart.content.type === 'reasoning'
+        ? [...msg.parts.slice(0, -1), { type: 'content', content: nextContent }]
+        : [...msg.parts, { type: 'content', content: nextContent }],
     }
   }
-  return { ...msg, content: [...msg.content, content] }
+  return {
+    ...msg,
+    content: [...msg.content, content],
+    parts: [...msg.parts, { type: 'content', content }],
+  }
 }
 
 function findToolCall(msg: AssistantMessage, callId: string): ToolCall | undefined {
@@ -79,6 +95,9 @@ function deriveMessageStatus(msg: AssistantMessage): AssistantMessage['status'] 
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
+    case 'LOAD_TURNS':
+      return { ...state, turns: action.turns, isLoading: false, error: null }
+
     case 'TURN_START': {
       const userMessage: Turn['userMessage'] = {
         id: action.userId,
@@ -92,6 +111,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         status: 'streaming',
         content: [],
         toolCalls: [],
+        parts: [],
       }
       const turn: Turn = {
         id: action.turnId,
@@ -131,6 +151,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           const updated: AssistantMessage = {
             ...turn.assistantMessage,
             toolCalls: [...turn.assistantMessage.toolCalls, newToolCall],
+            parts: [...turn.assistantMessage.parts, { type: 'tool', callId: action.callId }],
           }
           return { ...turn, assistantMessage: updated }
         }),
@@ -152,7 +173,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         turns: state.turns.map((turn) => {
-          if (turn.id !== action.turnId) return turn
+          if (action.turnId !== 'latest' && turn.id !== action.turnId) return turn
           const updated = updateToolCall(turn.assistantMessage, action.callId, {
             status: action.status,
             result: action.result,
@@ -186,6 +207,23 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           }
         }),
         isLoading: false,
+      }
+    }
+
+    case 'CANCEL': {
+      return {
+        ...state,
+        turns: state.turns.map((turn) => {
+          if (turn.assistantMessage.status !== 'streaming' && turn.assistantMessage.status !== 'waiting_approval') {
+            return turn
+          }
+          return {
+            ...turn,
+            assistantMessage: { ...turn.assistantMessage, status: 'incomplete' },
+          }
+        }),
+        isLoading: false,
+        error: null,
       }
     }
 

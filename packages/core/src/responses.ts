@@ -1,17 +1,23 @@
-import type { Session } from './types/session.js'
-import type { Message } from './types/message.js'
+import type { Project, Conversation, ConversationTimeline } from './types/index.js'
 import type { Device } from './types/device.js'
 
-export interface SessionResponse {
-  session: Session
+export interface ProjectResponse {
+  project: Project
 }
 
-export interface SessionListResponse {
-  sessions: Session[]
+export interface ProjectListResponse {
+  projects: Project[]
 }
 
-export interface MessageListResponse {
-  messages: Message[]
+export interface ConversationListResponse {
+  conversations: Conversation[]
+}
+
+export interface ConversationResponse {
+  conversation: Conversation
+}
+
+export interface ConversationTimelineResponse extends ConversationTimeline {
 }
 
 export interface DeviceResponse {

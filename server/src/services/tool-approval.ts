@@ -1,60 +1,87 @@
 import { prisma } from '../db/client.js'
 
+type PendingApproval = {
+  runId: string
+  resolve: (approved: boolean) => void
+}
+
 export class ToolApprovalService {
-  private pendingApprovals = new Map<string, { resolve: (approved: boolean) => void }>()
+  private readonly pending = new Map<string, PendingApproval>()
 
-  async requestApproval(toolCallId: string): Promise<boolean> {
+  async createApproval(data: {
+    runId: string
+    toolCallId: string
+    toolName: string
+    arguments: unknown
+  }): Promise<void> {
+    await prisma.approval.upsert({
+      where: { toolCallId: data.toolCallId },
+      create: {
+        runId: data.runId,
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
+        arguments: JSON.stringify(data.arguments),
+        status: 'pending',
+      },
+      update: {
+        runId: data.runId,
+        toolName: data.toolName,
+        arguments: JSON.stringify(data.arguments),
+        status: 'pending',
+        decision: null,
+        resolvedAt: null,
+      },
+    })
+
+  }
+
+  async waitForApproval(toolCallId: string, runId: string): Promise<boolean> {
+    const existing = await prisma.approval.findUnique({ where: { toolCallId } })
+    if (!existing || existing.runId !== runId) throw new Error(`Approval not found: ${toolCallId}`)
+    if (existing.status === 'approved') return true
+    if (existing.status === 'denied') return false
+
     return new Promise((resolve) => {
-      this.pendingApprovals.set(toolCallId, { resolve })
+      this.pending.set(toolCallId, { runId, resolve })
     })
   }
 
-  approve(toolCallId: string): boolean {
-    const pending = this.pendingApprovals.get(toolCallId)
-    if (!pending) return false
-    pending.resolve(true)
-    this.pendingApprovals.delete(toolCallId)
-    return true
+  async approve(conversationId: string, toolCallId: string): Promise<boolean> {
+    return this.resolve(conversationId, toolCallId, true)
   }
 
-  deny(toolCallId: string): boolean {
-    const pending = this.pendingApprovals.get(toolCallId)
-    if (!pending) return false
-    pending.resolve(false)
-    this.pendingApprovals.delete(toolCallId)
-    return true
+  async deny(conversationId: string, toolCallId: string): Promise<boolean> {
+    return this.resolve(conversationId, toolCallId, false)
   }
 
-  async saveToolCall(data: {
-    id: string
-    sessionId: string
-    name: string
-    args: unknown
-    status: string
-    result?: unknown
-    error?: string
-  }) {
-    await prisma.toolCall.create({
-      data: {
-        id: data.id,
-        sessionId: data.sessionId,
-        name: data.name,
-        args: JSON.stringify(data.args),
-        status: data.status,
-        result: data.result ? JSON.stringify(data.result) : null,
-        error: data.error ?? null,
+  private async resolve(
+    conversationId: string,
+    toolCallId: string,
+    approved: boolean,
+  ): Promise<boolean> {
+    const approval = await prisma.approval.findFirst({
+      where: {
+        toolCallId,
+        run: { conversationId },
+        status: 'pending',
       },
     })
-  }
+    if (!approval) return false
 
-  async updateToolCall(id: string, data: { status: string; result?: unknown; error?: string }) {
-    await prisma.toolCall.update({
-      where: { id },
+    await prisma.approval.update({
+      where: { id: approval.id },
       data: {
-        status: data.status,
-        result: data.result ? JSON.stringify(data.result) : undefined,
-        error: data.error,
+        status: approved ? 'approved' : 'denied',
+        decision: approved ? 'approve' : 'deny',
+        resolvedAt: new Date(),
       },
     })
+
+    const waiter = this.pending.get(toolCallId)
+    if (waiter) {
+      waiter.resolve(approved)
+      this.pending.delete(toolCallId)
+    }
+    return true
   }
 }

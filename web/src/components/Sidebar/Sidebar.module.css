@@ -1,244 +1,66 @@
 .sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  background: #f0f0f0;
-  color: #333;
+  width: 304px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  font-size: 13px;
-  overflow: hidden;
-  border-right: 1px solid #e0e0e0;
+  padding: 20px 10px 14px;
+  background: var(--color-bg-sidebar);
+  color: #343b40;
+  border-right: 1px solid #e4ebef;
 }
 
-.brandRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #222;
-  letter-spacing: -0.3px;
-}
+.brandRow { display: flex; align-items: center; gap: 5px; padding: 2px 10px 19px; }
+.brandName { color: #353c41; font-size: 18px; font-weight: 700; }
+.brandChevron { color: #7b858c; }
 
-.brandRow .brandDropdown {
-  color: #888;
-  font-size: 10px;
-  margin-left: 2px;
-}
+.newButton { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; color: #3f474d; cursor: pointer; text-align: left; font: inherit; font-size: 14px; }
+.newButton:disabled { opacity: .45; cursor: not-allowed; }
+.newButton:hover:not(:disabled) { background: #e4edf3; color: #1e282f; }
+.newIcon { color: #57636b; }
 
-.searchRow {
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-}
+.sectionHeader { display: flex; align-items: center; gap: 7px; padding: 27px 10px 9px; color: #8e989f; font-size: 14px; font-weight: 650; }
+.addProjectButton { display: grid; place-items: center; margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #77838b; cursor: pointer; }
+.addProjectButton:hover { background: #e1eaf0; color: #263139; }
+.projectList { flex: 1; overflow-y: auto; min-height: 0; }
+.projectSection { margin-bottom: 3px; }
+.projectRow { display: flex; align-items: center; min-width: 0; border-radius: 9px; }
+.projectButton, .conversationButton { width: 100%; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.projectButton { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border-radius: 9px; background: transparent; color: #4b545a; font-size: 14px; }
+.projectRow:hover, .projectButton:hover { background: #e5edf2; color: #232d33; }
+.projectIcon { flex: 0 0 17px; color: #626e75; }
+.projectName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectNewButton { display: grid; place-items: center; width: 28px; height: 28px; margin-right: 5px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #7a858c; cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+.projectRow:hover .projectNewButton { opacity: 1; }
+.projectNewButton:hover { background: #dce6ec; color: #263139; }
+.projectNewButton:disabled { opacity: .35; cursor: not-allowed; }
+.conversationList { padding: 2px 0 7px 22px; }
+.addConversationButton { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: #7d8991; cursor: pointer; font-size: 16px; line-height: 1; }
+.addConversationButton:hover { background: #dbe6ed; color: #27333a; }
+.addConversationButton:disabled { opacity: .45; cursor: not-allowed; }
+.conversationButton { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 10px; border-radius: 8px; background: transparent; color: #687279; font-size: 13px; }
+.conversationButton:hover { background: #e8eff3; color: #263139; }
+.conversationButtonActive { background: #dfe8ee; color: #222d34; }
+.statusDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #a0abb2; }
+.statusDotBusy { background: #6a9d33; box-shadow: 0 0 0 3px rgba(106,157,51,.14); }
+.conversationTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emptyProject { padding: 5px 13px 8px 22px; color: #9ba5ab; font-size: 13px; }
+.sidebarFooter { padding: 15px 10px 3px; border-top: 1px solid #dce5ea; }
+.connectionStatus { display: flex; align-items: center; gap: 7px; color: #68747b; font-size: 11px; }
+.onlineDot { width: 6px; height: 6px; border-radius: 50%; background: #79a84b; }
+.footerHint { margin-top: 5px; color: #9aa4aa; font-size: 10px; }
 
-.searchButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #666;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
+.projectPopover { position: fixed; z-index: 40; width: min(260px, calc(100vw - 24px)); overflow: hidden; border: 1px solid #dfe4e7; border-radius: 10px; background: #fff; box-shadow: 0 8px 18px rgba(31, 43, 51, .11), 0 2px 4px rgba(31, 43, 51, .05); color: #343b40; }
+.popoverHeader { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 9px; font-size: 13px; }
+.popoverFolderIcon { color: #4f5b62; flex: 0 0 auto; }
+.popoverHeader strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.popoverNewButton { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; border: 0; border-radius: 5px; background: transparent; color: #77838a; cursor: pointer; }
+.popoverNewButton:hover { background: #eef3f5; color: #273239; }
+.popoverNewButton:disabled { opacity: .4; cursor: not-allowed; }
+.popoverRow { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 9px; border-top: 1px solid #edf0f2; color: #41494f; font-size: 12px; }
+.popoverRow svg { flex: 0 0 auto; color: #8a949a; }
+.popoverPath { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.searchButton:hover {
-  background: #e0e0e0;
-}
-
-.menuSection {
-  padding: 8px 8px;
-}
-
-.menuItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #444;
-  font-size: 13px;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s;
-  font-family: inherit;
-}
-
-.menuItem:hover {
-  background: #e0e0e0;
-}
-
-.sectionLabel {
-  font-size: 11px;
-  font-weight: 600;
-  color: #888;
-  letter-spacing: 0.5px;
-  padding: 14px 16px 6px;
-}
-
-.projectsList {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 8px;
-}
-
-.projectsList::-webkit-scrollbar {
-  width: 4px;
-}
-
-.projectsList::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 2px;
-}
-
-.emptyState {
-  padding: 16px 8px;
-  font-size: 12px;
-  color: #999;
-  text-align: center;
-}
-
-.folderGroup {
-  margin-bottom: 2px;
-}
-
-.folderItem {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #444;
-  font-size: 13px;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s;
-  font-family: inherit;
-}
-
-.folderItem:hover {
-  background: #e0e0e0;
-}
-
-.folderArrow {
-  font-size: 9px;
-  color: #888;
-  width: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.folderText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.folderTasks {
-  padding-left: 14px;
-}
-
-.taskItem {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px 5px 14px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-size: 12px;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: inherit;
-}
-
-.taskItem:hover {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.taskItemActive {
-  background: #d6d6d6;
-  color: #222;
-  font-weight: 500;
-}
-
-.taskItemLoading .loadingSpinner {
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid #ccc;
-  border-top-color: #666;
-  border-radius: 50%;
-  animation: sidebarSpin 1s linear infinite;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-@keyframes sidebarSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.sidebarBottom {
-  padding: 8px 14px;
-  border-top: 1px solid #e0e0e0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-}
-
-.sidebarBottomLink {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-
-.sidebarBottomLink:hover {
-  background: #e0e0e0;
-}
-
-.sidebarHelpButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #888;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.sidebarHelpButton:hover {
-  background: #e0e0e0;
+@media (max-width: 760px) {
+  .sidebar { display: none; position: fixed; inset: 0 auto 0 0; z-index: 20; width: min(84vw, 300px); box-shadow: 12px 0 30px rgba(27, 38, 46, .16); }
+  .sidebar.sidebarOpen { display: flex; }
 }

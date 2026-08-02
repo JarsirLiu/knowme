@@ -11,7 +11,7 @@ html, body {
   color: var(--text-primary);
   background: var(--bg-primary);
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -52,4 +52,36 @@ body {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.reasoning-message {
+  margin: 4px 0 8px;
+  border-left: 2px solid #d7d9d6;
+  color: var(--text-muted);
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.reasoning-content {
+  display: none;
+  padding: 4px 10px 2px;
+  font-size: 12px;
+  opacity: .78;
+}
+
+.reasoning-content.reasoning-open { display: block; }
+
+@media (max-width: 760px) {
+  .reasoning-content { padding-right: 4px; }
 }

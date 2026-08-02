@@ -10,8 +10,8 @@ export interface CodingAgent {
   cfg: ReturnType<typeof loadConfig>
 }
 
-export function createCodingAgent(): CodingAgent {
-  const cfg = loadConfig()
+export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfig>> = {}): CodingAgent {
+  const cfg = { ...loadConfig(), ...overrides }
 
   setTracingDisabled(true)
 

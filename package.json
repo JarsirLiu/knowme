@@ -9,6 +9,7 @@
     "build:packages": "npm --prefix packages/core run build && npm --prefix packages/agent run build && npm --prefix packages/client run build",
     "build:server": "npm --prefix server run build",
     "build:web": "npm --prefix web run build",
+    "test:server": "npm --prefix server run test",
     "build": "npm run build:packages && npm run build:server && npm run build:web"
   }
 }

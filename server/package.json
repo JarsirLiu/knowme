@@ -6,21 +6,23 @@
   "scripts": {
     "dev": "tsx watch --conditions=development src/index.ts",
     "build": "tsc",
+    "test": "tsx --test test/*.test.ts",
     "start": "node dist/index.js",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev"
+    "db:generate": "tsx scripts/prisma-cli.ts generate --schema prisma/schema.prisma",
+    "db:push": "tsx scripts/prisma-cli.ts db push --schema prisma/schema.prisma",
+    "db:migrate": "tsx scripts/prisma-cli.ts migrate dev --schema prisma/schema.prisma"
   },
   "dependencies": {
     "fastify": "^5.3.2",
     "@fastify/cors": "^11.0.1",
-    "@prisma/client": "^6.6.0",
+    "@prisma/client": "6.19.3",
+    "@openai/agents": "^0.14.0",
     "dotenv": "^16.4.7",
     "@superagent/agent": "workspace:*",
     "@superagent/core": "workspace:*"
   },
   "devDependencies": {
-    "prisma": "^6.6.0",
+    "prisma": "6.19.3",
     "tsx": "^4.19.0",
     "typescript": "^5"
   }

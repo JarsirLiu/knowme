@@ -1,5 +1,11 @@
-export interface CreateSessionRequest {
-  name?: string
+export interface CreateProjectRequest {
+  name: string
+  rootPath: string
+}
+
+export interface StartTurnRequest {
+  message: string
+  clientMessageId: string
 }
 
 export interface ChatRequest {

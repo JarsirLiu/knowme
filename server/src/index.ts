@@ -4,7 +4,7 @@ import { logger } from './utils/logger.js'
 
 async function main() {
   const cfg = loadServerConfig()
-  const app = createApp()
+  const app = createApp(cfg)
 
   try {
     await app.listen({ port: cfg.port, host: '0.0.0.0' })

@@ -6,6 +6,7 @@ import { listDir } from './list-dir.js'
 import { globTool } from './glob-search.js'
 import { grep } from './grep-search.js'
 import { runCommand } from './run-command.js'
+import { webFetch } from './web-fetch.js'
 
 export function createTools(cfg: { autoApproveShell: boolean; workspace: string }): ReturnType<typeof tool>[] {
   const ws = cfg.workspace
@@ -17,5 +18,6 @@ export function createTools(cfg: { autoApproveShell: boolean; workspace: string 
     globTool(ws),
     grep(ws),
     runCommand(cfg.autoApproveShell, ws),
+    webFetch(),
   ]
 }

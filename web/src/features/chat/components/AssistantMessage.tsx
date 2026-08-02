@@ -15,6 +15,12 @@ interface AssistantMessageProps {
 export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessageProps) {
   const awaitingApproval = message.toolCalls.find((tc) => tc.status === 'awaiting_approval')
   const isEmpty = message.content.length === 0 && message.toolCalls.length === 0
+  const parts = message.parts.length > 0
+    ? message.parts
+    : [
+        ...message.content.map((content) => ({ type: 'content' as const, content })),
+        ...message.toolCalls.map((tool) => ({ type: 'tool' as const, callId: tool.id })),
+      ]
 
   return (
     <div className={`${styles.message} ${styles[message.status] || ''}`}>
@@ -23,18 +29,16 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
       ) : (
         <>
           <div className={styles.content}>
-            {message.content.map((part, i) =>
-              part.type === 'text' ? (
-                <TextMessage key={`text-${i}`} content={part.text} />
-              ) : (
-                <ReasoningMessage key={`reasoning-${i}`} content={part.text} />
-              )
-            )}
+            {parts.map((part, i) => {
+              if (part.type === 'tool') {
+                const toolCall = message.toolCalls.find((tool) => tool.id === part.callId)
+                return toolCall ? <ToolCallList key={`tool-${part.callId}`} toolCalls={[toolCall]} /> : null
+              }
+              return part.content.type === 'text'
+                ? <TextMessage key={`text-${i}`} content={part.content.text} />
+                : <ReasoningMessage key={`reasoning-${i}`} content={part.content.text} />
+            })}
           </div>
-
-          {message.toolCalls.length > 0 && (
-            <ToolCallList toolCalls={message.toolCalls} />
-          )}
 
           {awaitingApproval && (
             <ApprovalBar

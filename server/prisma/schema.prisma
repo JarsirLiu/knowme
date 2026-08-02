@@ -7,34 +7,128 @@ datasource db {
   url      = "file:./data.db"
 }
 
-model Session {
-  id        String     @id @default(cuid())
-  name      String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  messages  Message[]
-  toolCalls ToolCall[]
+model Project {
+  id            String         @id @default(cuid())
+  name          String
+  rootPath      String         @unique
+  settingsJson  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+}
+
+model Conversation {
+  id           String        @id @default(cuid())
+  projectId    String
+  title        String
+  status       String        @default("active")
+  agentProfile String        @default("coding")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agentSession AgentSession?
+  messages     Message[]
+  runs         AgentRun[]
+
+  @@index([projectId, updatedAt])
+}
+
+model AgentSession {
+  id             String       @id @default(cuid())
+  conversationId String       @unique
+  sessionKey     String       @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  items          SessionItem[]
+}
+
+model SessionItem {
+  id        String       @id @default(cuid())
+  sessionId String
+  sequence  Int
+  itemType  String
+  payload   String
+  createdAt DateTime     @default(now())
+  session   AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, sequence])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  sessionId String
-  role      String
-  content   String
-  createdAt DateTime @default(now())
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  conversationId String
+  runId          String?
+  role           String
+  content        String
+  createdAt      DateTime      @default(now())
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  run            AgentRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
 }
 
-model ToolCall {
+model AgentRun {
+  id              String        @id @default(cuid())
+  conversationId  String
+  clientMessageId String?
+  status          String        @default("queued")
+  input           String
+  output          String?
+  state           String?
+  error           String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  events          RunEvent[]
+  approvals       Approval[]
+  artifacts       Artifact[]
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, clientMessageId])
+  @@unique([clientMessageId])
+}
+
+model RunEvent {
   id        String   @id @default(cuid())
-  sessionId String
-  name      String
-  args      String
-  status    String   @default("running")
-  result    String?
-  error     String?
+  runId     String
+  sequence  Int
+  type      String
+  payload   String
   createdAt DateTime @default(now())
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+  @@index([runId, sequence])
+}
+
+model Approval {
+  id         String   @id @default(cuid())
+  runId      String
+  toolCallId String   @unique
+  toolName   String
+  arguments  String
+  status     String   @default("pending")
+  decision   String?
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
+  run        AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model Artifact {
+  id             String   @id @default(cuid())
+  runId          String?
+  fileName       String
+  mimeType       String?
+  size           Int?
+  sha256         String?
+  localPath      String
+  status         String   @default("ready")
+  createdAt      DateTime @default(now())
+  run            AgentRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
 }
 
 model Device {

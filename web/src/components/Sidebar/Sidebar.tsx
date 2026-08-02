@@ -1,99 +1,203 @@
+import { useRef, useState } from 'react'
+import type { Conversation, Project } from '@superagent/core'
+import type { ActiveConversation } from '@/features/chat/hooks/useAgentChat'
 import styles from './Sidebar.module.css'
 
-interface SessionItem {
-  id: string
-  title: string
-  createdAt: number
-  updatedAt: number
-}
-
-interface ProjectGroup {
-  name: string
-  sessions: SessionItem[]
-}
-
 type SidebarProps = {
-  projects: ProjectGroup[]
-  sessions: SessionItem[]
-  currentId: string
+  projects: Project[]
+  conversationsByProject: Record<string, Conversation[]>
+  activeProjectId: string
+  active: ActiveConversation | null
   isLoading: boolean
-  onSelect: (id: string) => void
-  onNew: () => void
+  mobileOpen: boolean
+  onSelectProject: (projectId: string) => void
+  onSelectConversation: (conversationId: string, projectId: string) => void
+  onNew: (projectId: string) => void
+  onNewProject: () => void
 }
 
-export function Sidebar({ projects, sessions, currentId, isLoading, onSelect, onNew }: SidebarProps) {
-  const renderFolder = (project: ProjectGroup) => (
-    <div key={project.name} className={styles.folderGroup}>
-      <button className={styles.folderItem} type="button">
-        <span className={styles.folderText}>{project.name}</span>
-      </button>
-      {project.sessions.map((session) => {
-        const isActive = session.id === currentId
-        return (
-          <button
-            key={session.id}
-            className={`${styles.taskItem} ${isActive ? styles.taskItemActive : ''} ${isActive && isLoading ? styles.taskItemLoading : ''}`}
-            type="button"
-            onClick={() => onSelect(session.id)}
-            title={session.title}
-          >
-            <span>{session.title}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
+type ProjectPopoverPosition = {
+  top: number
+  left: number
+}
+
+function activeConversationId(active: ActiveConversation | null): string | undefined {
+  if (!active) return undefined
+  return active.kind === 'persisted' ? active.conversationId : active.conversationId
+}
+
+export function Sidebar({
+  projects,
+  conversationsByProject,
+  activeProjectId,
+  active,
+  isLoading,
+  mobileOpen,
+  onSelectProject,
+  onSelectConversation,
+  onNew,
+  onNewProject,
+}: SidebarProps) {
+  const selectedConversationId = activeConversationId(active)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null)
+  const [popoverPosition, setPopoverPosition] = useState<ProjectPopoverPosition | null>(null)
+  const hidePopoverTimer = useRef<number | undefined>(undefined)
+
+  const cancelHidePopover = () => {
+    if (hidePopoverTimer.current !== undefined) {
+      window.clearTimeout(hidePopoverTimer.current)
+      hidePopoverTimer.current = undefined
+    }
+  }
+
+  const showProjectPopover = (projectId: string, element: HTMLElement) => {
+    cancelHidePopover()
+    const rect = element.getBoundingClientRect()
+    const sidebarRect = sidebarRef.current?.getBoundingClientRect()
+    setHoveredProjectId(projectId)
+    setPopoverPosition({
+      top: Math.max(12, Math.min(rect.top, window.innerHeight - 250)),
+      left: (sidebarRect?.right ?? rect.right) + 8,
+    })
+  }
+
+  const scheduleHidePopover = () => {
+    cancelHidePopover()
+    hidePopoverTimer.current = window.setTimeout(() => {
+      setHoveredProjectId(null)
+      setPopoverPosition(null)
+    }, 120)
+  }
+
+  const hoveredProject = projects.find((project) => project.id === hoveredProjectId)
+  const hoveredConversations = hoveredProject ? conversationsByProject[hoveredProject.id] ?? [] : []
+  const activeConversationCount = hoveredConversations.filter((conversation) => conversation.status === 'active').length
 
   return (
-    <aside className={styles.sidebar}>
+    <aside ref={sidebarRef} className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
       <div className={styles.brandRow}>
-        <span className={styles.brandName}>SuperAgent</span>
+        <div className={styles.brandName}>SuperAgent</div>
+        <svg className={styles.brandChevron} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </div>
 
-      <div className={styles.searchRow}>
-        <button className={styles.searchButton} type="button">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <button className={styles.newButton} type="button" onClick={() => onNew(activeProjectId)} disabled={!activeProjectId || isLoading}>
+        <svg className={styles.newIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M13.5 5.5H6A2 2 0 0 0 4 7.5v10A2 2 0 0 0 6 19.5h10a2 2 0 0 0 2-2V10" />
+          <path d="m14 4 6 6M12 14l1.5-4.5L18 8l2 2-1.5 4.5L14 16l-2-2Z" />
+        </svg>
+        <span>新对话</span>
+      </button>
+
+      <div className={styles.sectionHeader}>
+        <span>项目</span>
+        <button className={styles.addProjectButton} type="button" onClick={onNewProject} title="新建项目" aria-label="新建项目">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
       </div>
 
-      <div className={styles.sectionLabel}>项目</div>
+      <div className={styles.projectList}>
+        {projects.map((project) => {
+          const conversations = conversationsByProject[project.id] ?? []
+          return (
+            <section
+              key={project.id}
+              className={styles.projectSection}
+              onMouseEnter={(event) => showProjectPopover(project.id, event.currentTarget.querySelector(`.${styles.projectButton}`) as HTMLElement)}
+              onMouseLeave={scheduleHidePopover}
+            >
+              <div className={styles.projectRow}>
+                <button
+                  type="button"
+                  className={styles.projectButton}
+                  onClick={() => onSelectProject(project.id)}
+                  title={project.rootPath}
+                >
+                  <svg className={styles.projectIcon} width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
+                  </svg>
+                  <span className={styles.projectName}>{project.name}</span>
+                </button>
+                <button
+                  className={styles.projectNewButton}
+                  type="button"
+                  onClick={() => onNew(project.id)}
+                  disabled={isLoading}
+                  title={`在 ${project.name} 中新建会话`}
+                  aria-label={`在 ${project.name} 中新建会话`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              </div>
 
-      <div className={styles.projectsList}>
-        {projects.length === 0 && sessions.length === 0 ? (
-          <div className={styles.emptyState}>暂无对话</div>
-        ) : (
-          <>
-            {projects.map(renderFolder)}
-            {sessions
-              .filter((s) => !projects.some((p) => p.sessions.some((ps) => ps.id === s.id)))
-              .map((session) => {
-                const isActive = session.id === currentId
-                return (
-                  <button
-                    key={session.id}
-                    className={`${styles.taskItem} ${isActive ? styles.taskItemActive : ''} ${isActive && isLoading ? styles.taskItemLoading : ''}`}
-                    type="button"
-                    onClick={() => onSelect(session.id)}
-                    title={session.title}
-                  >
-                    <span>{session.title}</span>
-                  </button>
-                )
-              })}
-          </>
-        )}
+              <div className={styles.conversationList}>
+                {conversations.map((conversation) => {
+                  const selected = conversation.id === selectedConversationId
+                  return (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      className={`${styles.conversationButton} ${selected ? styles.conversationButtonActive : ''}`}
+                      onClick={() => onSelectConversation(conversation.id, project.id)}
+                      title={conversation.title}
+                    >
+                      <span className={`${styles.statusDot} ${isLoading && selected ? styles.statusDotBusy : ''}`} />
+                      <span className={styles.conversationTitle}>{conversation.title}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })}
       </div>
 
-      <div className={styles.sidebarBottom}>
-        <button className={styles.sidebarBottomLink} type="button" onClick={onNew}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span>新建</span>
-        </button>
-      </div>
+      {hoveredProject && popoverPosition && (
+        <div
+          className={styles.projectPopover}
+          style={{ top: popoverPosition.top, left: popoverPosition.left }}
+          onMouseEnter={cancelHidePopover}
+          onMouseLeave={scheduleHidePopover}
+        >
+          <div className={styles.popoverHeader}>
+            <svg className={styles.popoverFolderIcon} width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
+            </svg>
+            <strong>{hoveredProject.name}</strong>
+            <button
+              className={styles.popoverNewButton}
+              type="button"
+              onClick={() => onNew(hoveredProject.id)}
+              disabled={isLoading}
+              title="新建会话"
+              aria-label="新建会话"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          <div className={styles.popoverRow}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            <span>{activeConversationCount} 个活跃会话</span>
+          </div>
+          <div className={styles.popoverRow}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
+            </svg>
+            <span className={styles.popoverPath} title={hoveredProject.rootPath}>{hoveredProject.rootPath}</span>
+          </div>
+        </div>
+      )}
+
     </aside>
   )
 }
