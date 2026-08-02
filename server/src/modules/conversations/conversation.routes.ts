@@ -20,6 +20,12 @@ export function registerConversationRoutes(
     return reply.status(204).send()
   })
 
+  app.post('/api/conversations/:conversationId/context/compact', async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string }
+    const result = await conversationService.compactContext(conversationId)
+    return reply.send(result)
+  })
+
   app.post('/api/conversations/:conversationId/turns', async (req, reply) => {
     reply.hijack()
     const { conversationId } = req.params as { conversationId: string }

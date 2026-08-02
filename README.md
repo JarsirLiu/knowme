@@ -59,4 +59,12 @@ pnpm run build
 SUPERAGENT_AUTO_APPROVE_SHELL=true
 ```
 
+上下文自动压缩默认开启，超过 80 条 Agent Session 记录后会保留最近 24 条并压缩更早历史。需要调整时可设置：
+
+```dotenv
+SUPERAGENT_CONTEXT_AUTO_COMPACT=true
+SUPERAGENT_CONTEXT_COMPACT_ITEM_THRESHOLD=80
+SUPERAGENT_CONTEXT_COMPACT_KEEP_RECENT=24
+```
+
 详细架构方案见 [docs](docs/)。

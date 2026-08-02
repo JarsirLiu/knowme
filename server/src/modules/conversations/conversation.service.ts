@@ -1,4 +1,6 @@
 import { prisma } from '../../db/client.js'
+import { PrismaAgentSession } from '../history/agent-session-store.js'
+import { loadSessionCompactionOptions } from '../history/session-compaction.js'
 
 function titleFromMessage(message: string): string {
   const title = message.replace(/\s+/g, ' ').trim()
@@ -137,6 +139,27 @@ export class ConversationService {
     })
 
     return { conversation, messages }
+  }
+
+  async compactContext(id: string) {
+    const conversation = await this.get(id)
+    if (conversation.status !== 'active') {
+      throw new Error(`Conversation is not active: ${id}`)
+    }
+
+    const activeRun = await prisma.agentRun.findFirst({
+      where: {
+        conversationId: id,
+        status: { in: ['queued', 'running', 'waiting_approval'] },
+      },
+    })
+    if (activeRun) {
+      throw new Error('Cannot compact context while a run is active')
+    }
+
+    const sessionId = await this.getSessionId(id)
+    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions())
+    return session.compact('manual')
   }
 
   async getSessionId(conversationId: string): Promise<string> {

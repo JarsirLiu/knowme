@@ -78,6 +78,49 @@ test('durable agent session preserves ordering and pop semantics', async () => {
   assert.deepEqual(await session.getItems(), [first])
 })
 
+test('manual context compaction summarizes old session items and keeps recent items', async () => {
+  const conversations = new ConversationService()
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'compact this context',
+    clientMessageId: 'test-compact-message-1',
+  })
+  const sessionRecord = await prisma.agentSession.findUnique({
+    where: { conversationId: turn.conversation.id },
+  })
+  assert.ok(sessionRecord)
+
+  const items = ['one', 'two', 'three', 'four', 'five'].map((text) => ({
+    type: 'message',
+    role: 'user',
+    content: [{ type: 'input_text', text }],
+  })) as any[]
+  const session = new PrismaAgentSession(sessionRecord.id, {
+    enabled: true,
+    itemThreshold: 3,
+    keepRecentItems: 2,
+    maxPromptChars: 4000,
+    summarizer: {
+      async summarize(input) {
+        return `summary for ${input.items.length} items`
+      },
+    },
+  })
+  await session.addItems(items)
+
+  const result = await session.compact('manual')
+  assert.equal(result.status, 'compacted')
+  assert.equal(result.beforeItems, 5)
+  assert.equal(result.afterItems, 3)
+  assert.equal(result.compactedItems, 3)
+
+  const compacted = await session.getItems()
+  assert.equal(compacted.length, 3)
+  assert.equal((compacted[0] as any).role, 'system')
+  assert.match(JSON.stringify(compacted[0]), /summary for 3 items/)
+  assert.deepEqual(compacted.slice(1), items.slice(-2))
+})
+
 test('approval decisions are persisted and can be observed by a waiter', async () => {
   const run = await prisma.agentRun.findFirstOrThrow({ where: { conversationId: primaryConversationId } })
   const approvals = new ApprovalService()

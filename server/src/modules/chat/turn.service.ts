@@ -7,6 +7,7 @@ import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { RunEventStore } from '../events/run-event-store.js'
 import { PrismaAgentSession } from '../history/agent-session-store.js'
+import { loadSessionCompactionOptions } from '../history/session-compaction.js'
 
 type TurnTarget =
   | { projectId: string; conversationId?: undefined }
@@ -110,7 +111,7 @@ export class TurnService {
 
     const { agent, cfg } = createCodingAgent({ workspace: project.rootPath })
     const sessionId = await this.conversationService.getSessionId(conversationId)
-    const session = new PrismaAgentSession(sessionId)
+    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions())
 
     await prisma.agentRun.update({
       where: { id: runId },

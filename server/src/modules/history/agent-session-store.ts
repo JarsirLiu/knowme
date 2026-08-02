@@ -1,8 +1,18 @@
 import type { AgentInputItem, Session } from '@openai/agents'
 import { prisma } from '../../db/client.js'
+import {
+  compactSession,
+  replaceSessionItems,
+  type SessionCompactionOptions,
+  type SessionCompactionResult,
+  type SessionCompactionTrigger,
+} from './session-compaction.js'
 
 export class PrismaAgentSession implements Session {
-  constructor(private readonly sessionId: string) {}
+  constructor(
+    private readonly sessionId: string,
+    private readonly compaction?: SessionCompactionOptions,
+  ) {}
 
   async getSessionId(): Promise<string> {
     return this.sessionId
@@ -56,5 +66,36 @@ export class PrismaAgentSession implements Session {
 
   async clearSession(): Promise<void> {
     await prisma.sessionItem.deleteMany({ where: { sessionId: this.sessionId } })
+  }
+
+  async replaceItems(items: AgentInputItem[]): Promise<void> {
+    await replaceSessionItems(this.sessionId, items)
+  }
+
+  async compact(trigger: SessionCompactionTrigger): Promise<SessionCompactionResult> {
+    if (!this.compaction) {
+      return {
+        status: 'skipped',
+        reason: 'compaction not configured',
+        beforeItems: 0,
+        afterItems: 0,
+        compactedItems: 0,
+        keptItems: 0,
+      }
+    }
+    return compactSession(this.sessionId, this.compaction, trigger)
+  }
+
+  async runCompaction(): Promise<null> {
+    if (!this.compaction) return null
+
+    try {
+      await compactSession(this.sessionId, this.compaction, 'auto')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn('[context-compaction] skipped:', message)
+    }
+
+    return null
   }
 }
