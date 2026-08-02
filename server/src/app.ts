@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import { registerRoutes } from './routes/index.js'
+import { registerRoutes } from './modules/index.js'
 import type { ServerConfig } from './config.js'
 import { ensureDatabase } from './db/ensure-database.js'
 

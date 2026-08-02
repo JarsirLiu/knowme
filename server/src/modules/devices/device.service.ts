@@ -1,6 +1,6 @@
-import { prisma } from '../db/client.js'
+import { prisma } from '../../db/client.js'
 
-export class DeviceManager {
+export class DeviceService {
   async list() {
     return prisma.device.findMany()
   }

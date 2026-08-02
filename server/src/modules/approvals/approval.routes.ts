@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import type { ToolApprovalService } from '../services/tool-approval.js'
+import type { ApprovalService } from './approval.service.js'
 
-export function registerToolRoutes(app: FastifyInstance, approvalService: ToolApprovalService) {
+export function registerApprovalRoutes(app: FastifyInstance, approvalService: ApprovalService) {
   app.post('/api/conversations/:conversationId/approvals/:toolCallId/approve', async (req, reply) => {
     const { conversationId, toolCallId } = req.params as { conversationId: string; toolCallId: string }
     const ok = await approvalService.approve(conversationId, toolCallId)

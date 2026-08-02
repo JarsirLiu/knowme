@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import type { ConversationService } from '../services/conversation-service.js'
-import type { ChatService } from '../services/chat-service.js'
+import type { TurnService } from '../chat/turn.service.js'
+import type { ConversationService } from './conversation.service.js'
 
 export function registerConversationRoutes(
   app: FastifyInstance,
   conversationService: ConversationService,
-  chatService: ChatService,
+  turnService: TurnService,
 ) {
   app.get('/api/conversations/:conversationId/timeline', async (req, reply) => {
     const { conversationId } = req.params as { conversationId: string }
@@ -24,7 +24,7 @@ export function registerConversationRoutes(
     reply.hijack()
     const { conversationId } = req.params as { conversationId: string }
     const body = req.body as { message?: string; clientMessageId?: string }
-    await chatService.handleTurn(
+    await turnService.handleTurn(
       { conversationId },
       body?.message?.trim() ?? '',
       body?.clientMessageId ?? randomUUID(),

@@ -1,11 +1,11 @@
-import { prisma } from '../db/client.js'
+import { prisma } from '../../db/client.js'
 
 type PendingApproval = {
   runId: string
   resolve: (approved: boolean) => void
 }
 
-export class ToolApprovalService {
+export class ApprovalService {
   private readonly pending = new Map<string, PendingApproval>()
 
   async createApproval(data: {

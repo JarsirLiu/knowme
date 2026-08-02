@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { prisma } from '../db/client.js'
+import { prisma } from '../../db/client.js'
 
 export class ProjectService {
   async list() {

@@ -6,10 +6,10 @@ import test from 'node:test'
 import { createApp } from '../src/app.js'
 import { prisma } from '../src/db/client.js'
 import { ensureDatabase } from '../src/db/ensure-database.js'
-import { ConversationService } from '../src/services/conversation-service.js'
-import { PrismaAgentSession } from '../src/services/durable-session.js'
-import { ProjectService } from '../src/services/project-service.js'
-import { ToolApprovalService } from '../src/services/tool-approval.js'
+import { ApprovalService } from '../src/modules/approvals/approval.service.js'
+import { ConversationService } from '../src/modules/conversations/conversation.service.js'
+import { PrismaAgentSession } from '../src/modules/history/agent-session-store.js'
+import { ProjectService } from '../src/modules/projects/project.service.js'
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
 let projectId: string
@@ -80,7 +80,7 @@ test('durable agent session preserves ordering and pop semantics', async () => {
 
 test('approval decisions are persisted and can be observed by a waiter', async () => {
   const run = await prisma.agentRun.findFirstOrThrow({ where: { conversationId: primaryConversationId } })
-  const approvals = new ToolApprovalService()
+  const approvals = new ApprovalService()
   const toolCallId = `test-tool-${Date.now()}`
   await approvals.createApproval({
     runId: run.id,

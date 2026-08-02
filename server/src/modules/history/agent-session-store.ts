@@ -1,5 +1,5 @@
 import type { AgentInputItem, Session } from '@openai/agents'
-import { prisma } from '../db/client.js'
+import { prisma } from '../../db/client.js'
 
 export class PrismaAgentSession implements Session {
   constructor(private readonly sessionId: string) {}

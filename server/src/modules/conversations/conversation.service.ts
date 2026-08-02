@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js'
+import { prisma } from '../../db/client.js'
 
 function titleFromMessage(message: string): string {
   const title = message.replace(/\s+/g, ' ').trim()

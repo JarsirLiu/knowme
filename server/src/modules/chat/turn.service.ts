@@ -1,20 +1,22 @@
 import type { FastifyReply } from 'fastify'
 import { run, RunState, type Agent, type RunStreamEvent } from '@openai/agents'
 import { createCodingAgent } from '@superagent/agent'
-import { setupSSEHeaders, sendSSE } from '../utils/sse.js'
-import { prisma } from '../db/client.js'
-import { ConversationService } from './conversation-service.js'
-import { PrismaAgentSession } from './durable-session.js'
-import { ToolApprovalService } from './tool-approval.js'
+import { prisma } from '../../db/client.js'
+import { setupSSEHeaders, sendSSE } from '../../utils/sse.js'
+import { ApprovalService } from '../approvals/approval.service.js'
+import { ConversationService } from '../conversations/conversation.service.js'
+import { RunEventStore } from '../events/run-event-store.js'
+import { PrismaAgentSession } from '../history/agent-session-store.js'
 
 type TurnTarget =
   | { projectId: string; conversationId?: undefined }
   | { conversationId: string; projectId?: undefined }
 
-export class ChatService {
+export class TurnService {
   constructor(
     private readonly conversationService: ConversationService,
-    private readonly approvalService: ToolApprovalService,
+    private readonly approvalService: ApprovalService,
+    private readonly eventStore: RunEventStore,
   ) {}
 
   async handleTurn(
@@ -114,7 +116,7 @@ export class ChatService {
       where: { id: runId },
       data: { status: 'running', startedAt: new Date() },
     })
-    await this.appendEvent(runId, 'run.started', { conversationId })
+    await this.eventStore.append(runId, 'run.started', { conversationId })
     sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
 
     try {
@@ -157,7 +159,7 @@ export class ChatService {
           finishedAt: new Date(),
         },
       })
-      await this.appendEvent(runId, 'run.completed', { output: finalOutput })
+      await this.eventStore.append(runId, 'run.completed', { output: finalOutput })
       sendSSE(reply, { type: 'status', data: { status: 'idle' } })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -169,7 +171,7 @@ export class ChatService {
           finishedAt: new Date(),
         },
       })
-      await this.appendEvent(runId, signal.aborted ? 'run.cancelled' : 'run.failed', {
+      await this.eventStore.append(runId, signal.aborted ? 'run.cancelled' : 'run.failed', {
         error: signal.aborted ? 'Run cancelled by client' : message,
       })
       if (!signal.aborted) sendSSE(reply, { type: 'error', data: { message } })
@@ -221,7 +223,7 @@ export class ChatService {
         toolName: name,
         arguments: args,
       })
-      await this.appendEvent(runId, 'approval.requested', { id: callId, name, args })
+      await this.eventStore.append(runId, 'approval.requested', { id: callId, name, args })
       sendSSE(reply, {
         type: 'tool_call_awaiting_approval',
         data: { id: callId, name, args },
@@ -250,7 +252,7 @@ export class ChatService {
     if (event.type === 'raw_model_stream_event') {
       const data = (event as { data?: { type?: string; delta?: string } }).data
       if (data?.type === 'output_text_delta' && data.delta) {
-        await this.appendEvent(runId, 'message.delta', { text: data.delta })
+        await this.eventStore.append(runId, 'message.delta', { text: data.delta })
         sendSSE(reply, { type: 'text_delta', data: { text: data.delta } })
       }
       return
@@ -264,30 +266,15 @@ export class ChatService {
     if (event.name === 'tool_called' && item.type === 'tool_call_item') {
       const id = String(raw.callId ?? raw.id ?? 'unknown')
       const name = String(raw.name ?? 'unknown')
-      await this.appendEvent(runId, 'tool.called', { id, name })
+      await this.eventStore.append(runId, 'tool.called', { id, name })
       sendSSE(reply, { type: 'tool_call_start', data: { id, name } })
     }
 
     if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
       const id = String(raw.callId ?? raw.id ?? 'unknown')
       const result = raw.output
-      await this.appendEvent(runId, 'tool.output', { id, result })
+      await this.eventStore.append(runId, 'tool.output', { id, result })
       sendSSE(reply, { type: 'tool_call_completed', data: { id, result } })
     }
-  }
-
-  private async appendEvent(runId: string, type: string, payload: unknown) {
-    const last = await prisma.runEvent.findFirst({
-      where: { runId },
-      orderBy: { sequence: 'desc' },
-    })
-    await prisma.runEvent.create({
-      data: {
-        runId,
-        sequence: (last?.sequence ?? 0) + 1,
-        type,
-        payload: JSON.stringify(payload),
-      },
-    })
   }
 }

@@ -1,14 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import type { ProjectService } from '../services/project-service.js'
-import type { ConversationService } from '../services/conversation-service.js'
-import type { ChatService } from '../services/chat-service.js'
+import type { TurnService } from '../chat/turn.service.js'
+import type { ConversationService } from '../conversations/conversation.service.js'
+import type { ProjectService } from './project.service.js'
 
 export function registerProjectRoutes(
   app: FastifyInstance,
   projectService: ProjectService,
   conversationService: ConversationService,
-  chatService: ChatService,
+  turnService: TurnService,
 ) {
   app.get('/api/projects', async (_req, reply) => {
     const projects = await projectService.list()
@@ -34,7 +34,7 @@ export function registerProjectRoutes(
     reply.hijack()
     const { projectId } = req.params as { projectId: string }
     const body = req.body as { message?: string; clientMessageId?: string }
-    await chatService.handleTurn(
+    await turnService.handleTurn(
       { projectId },
       body?.message?.trim() ?? '',
       body?.clientMessageId ?? randomUUID(),

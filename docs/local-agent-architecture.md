@@ -140,8 +140,8 @@ stateDiagram-v2
 当前项目虽然依赖了 Agents SDK，但 Agent 内核与应用层会话状态耦合较重：
 
 - `packages/agent/src/agent.ts` 负责创建 Agent，但模型、工具、配置和运行状态没有进一步抽象。
-- `server/src/services/chat-service.ts` 每次请求都手动读取 `Message` 并重建输入，无法完整保存工具调用、工具输出和中断状态。
-- `server/src/services/tool-approval.ts` 使用内存 Promise 保存审批，进程重启或多请求并发时无法恢复。
+- `server/src/modules/chat/turn.service.ts` 仍把 HTTP SSE 生命周期和本轮 Agent 执行绑定在一起，后续需要继续拆出可恢复运行。
+- `server/src/modules/approvals/approval.service.ts` 使用内存 Promise 保存审批，进程重启或多请求并发时无法恢复。
 - 当前消息模型以普通字符串为主，不足以表示 Agent 的完整输入项。
 - `run_command` 是宿主机命令执行能力，必须和明确的工作目录、审批策略以及超时策略绑定。
 
