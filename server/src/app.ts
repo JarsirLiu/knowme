@@ -5,7 +5,7 @@ import type { ServerConfig } from './config.js'
 import { ensureDatabase } from './db/ensure-database.js'
 
 export function createApp(config: ServerConfig) {
-  const app = Fastify({ logger: true })
+  const app = Fastify({ logger: process.env.SUPERAGENT_FASTIFY_LOGGER === 'true' })
 
   app.register(cors, { origin: true })
 

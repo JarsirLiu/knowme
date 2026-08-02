@@ -4,12 +4,12 @@
   "private": true,
   "description": "Local coding agent powered by @openai/agents",
   "scripts": {
-    "dev:server": "npm --prefix server run dev",
-    "dev:web": "npm --prefix web run dev",
-    "build:packages": "npm --prefix packages/core run build && npm --prefix packages/agent run build && npm --prefix packages/client run build",
-    "build:server": "npm --prefix server run build",
-    "build:web": "npm --prefix web run build",
-    "test:server": "npm --prefix server run test",
-    "build": "npm run build:packages && npm run build:server && npm run build:web"
+    "dev:server": "pnpm --dir server run dev",
+    "dev:web": "pnpm --dir web run dev",
+    "build:packages": "pnpm --dir packages/core run build && pnpm --dir packages/agent run build && pnpm --dir packages/client run build",
+    "build:server": "pnpm --dir server run build",
+    "build:web": "pnpm --dir web run build",
+    "test:server": "pnpm --dir server run test",
+    "build": "pnpm run build:packages && pnpm run build:server && pnpm run build:web"
   }
 }
