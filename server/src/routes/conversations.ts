@@ -14,6 +14,12 @@ export function registerConversationRoutes(
     return reply.send(timeline)
   })
 
+  app.delete('/api/conversations/:conversationId', async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string }
+    await conversationService.delete(conversationId)
+    return reply.status(204).send()
+  })
+
   app.post('/api/conversations/:conversationId/turns', async (req, reply) => {
     reply.hijack()
     const { conversationId } = req.params as { conversationId: string }

@@ -13,6 +13,7 @@ import { ToolApprovalService } from '../src/services/tool-approval.js'
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
 let projectId: string
+let primaryConversationId: string
 
 test.before(async () => {
   await ensureDatabase()
@@ -47,6 +48,7 @@ test('project and conversation persistence is idempotent', async () => {
   assert.equal(duplicate.created, false)
   assert.equal(duplicate.conversation.id, first.conversation.id)
   assert.equal(duplicate.run.id, first.run.id)
+  primaryConversationId = first.conversation.id
 
   const second = await conversations.continueTurn({
     conversationId: first.conversation.id,
@@ -61,7 +63,7 @@ test('project and conversation persistence is idempotent', async () => {
 
 test('durable agent session preserves ordering and pop semantics', async () => {
   const sessionRecord = await prisma.agentSession.findUnique({
-    where: { conversationId: (await prisma.conversation.findFirstOrThrow({ where: { id: { not: '' } } })).id },
+    where: { conversationId: primaryConversationId },
   })
   assert.ok(sessionRecord)
 
@@ -77,7 +79,7 @@ test('durable agent session preserves ordering and pop semantics', async () => {
 })
 
 test('approval decisions are persisted and can be observed by a waiter', async () => {
-  const run = await prisma.agentRun.findFirstOrThrow({ where: { conversationId: { not: '' } } })
+  const run = await prisma.agentRun.findFirstOrThrow({ where: { conversationId: primaryConversationId } })
   const approvals = new ToolApprovalService()
   const toolCallId = `test-tool-${Date.now()}`
   await approvals.createApproval({
@@ -91,6 +93,36 @@ test('approval decisions are persisted and can be observed by a waiter', async (
   assert.equal(await approvals.approve(run.conversationId, toolCallId), true)
   assert.equal(await waiter, true)
   assert.equal((await prisma.approval.findUnique({ where: { toolCallId } }))?.status, 'approved')
+})
+
+test('conversation delete archives it without losing persisted history', async () => {
+  const conversations = new ConversationService()
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'delete me later',
+    clientMessageId: 'test-delete-message-1',
+  })
+
+  const beforeDelete = await conversations.list(projectId)
+  assert.ok(beforeDelete.some((conversation) => conversation.id === turn.conversation.id))
+
+  const deleted = await conversations.delete(turn.conversation.id)
+  assert.equal(deleted.status, 'archived')
+
+  const afterDelete = await conversations.list(projectId)
+  assert.equal(afterDelete.some((conversation) => conversation.id === turn.conversation.id), false)
+
+  const timeline = await conversations.getTimeline(turn.conversation.id)
+  assert.deepEqual(timeline.messages.map((message) => message.content), ['delete me later'])
+
+  await assert.rejects(
+    conversations.continueTurn({
+      conversationId: turn.conversation.id,
+      message: 'should fail',
+      clientMessageId: 'test-delete-message-2',
+    }),
+    /Conversation is not active/,
+  )
 })
 
 test('HTTP routes validate project input and return the local project list', async () => {

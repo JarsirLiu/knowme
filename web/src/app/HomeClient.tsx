@@ -26,6 +26,7 @@ export default function HomeClient() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [projectModalOpen, setProjectModalOpen] = useState(false)
   const [creatingProject, setCreatingProject] = useState(false)
+  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
 
   const handleConversationCreated = useCallback((data: { conversationId: string; title: string }) => {
     setActive((current) => {
@@ -137,6 +138,39 @@ export default function HomeClient() {
     setMobileNavOpen(false)
   }, [isLoading])
 
+  const handleDeleteConversation = useCallback(async (conversationId: string, projectId: string) => {
+    if (isLoading || deletingConversationId) return
+    const conversations = conversationsByProject[projectId] ?? []
+    const target = conversations.find((conversation) => conversation.id === conversationId)
+    if (!target) return
+    if (!window.confirm(`删除会话“${target.title}”？`)) return
+
+    setDeletingConversationId(conversationId)
+    try {
+      await client.deleteConversation(conversationId)
+      const nextConversations = conversations.filter((conversation) => conversation.id !== conversationId)
+      setConversationsByProject((current) => ({
+        ...current,
+        [projectId]: (current[projectId] ?? []).filter((conversation) => conversation.id !== conversationId),
+      }))
+
+      const activeConversationId = active?.kind === 'persisted' ? active.conversationId : active?.conversationId
+      const deletingActive = activeConversationId === conversationId
+      if (deletingActive) {
+        const nextConversation = nextConversations[0]
+        setActiveProjectId(projectId)
+        setActive(nextConversation
+          ? { kind: 'persisted', conversationId: nextConversation.id, projectId }
+          : createDraft(projectId))
+        setInput('')
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDeletingConversationId(null)
+    }
+  }, [active, conversationsByProject, deletingConversationId, isLoading])
+
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return
     const message = input
@@ -164,8 +198,10 @@ export default function HomeClient() {
         mobileOpen={mobileNavOpen}
         onSelectProject={handleSelectProject}
         onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
         onNew={handleNew}
         onNewProject={handleNewProject}
+        deletingConversationId={deletingConversationId}
       />
 
       <main className={styles.mainPane}>

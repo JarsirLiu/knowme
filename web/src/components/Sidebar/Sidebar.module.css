@@ -24,7 +24,8 @@
 .projectList { flex: 1; overflow-y: auto; min-height: 0; }
 .projectSection { margin-bottom: 3px; }
 .projectRow { display: flex; align-items: center; min-width: 0; border-radius: 9px; }
-.projectButton, .conversationButton { width: 100%; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.projectButton, .conversationButton { border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.projectButton { width: 100%; }
 .projectButton { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border-radius: 9px; background: transparent; color: #4b545a; font-size: 14px; }
 .projectRow:hover, .projectButton:hover { background: #e5edf2; color: #232d33; }
 .projectIcon { flex: 0 0 17px; color: #626e75; }
@@ -37,9 +38,15 @@
 .addConversationButton { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: #7d8991; cursor: pointer; font-size: 16px; line-height: 1; }
 .addConversationButton:hover { background: #dbe6ed; color: #27333a; }
 .addConversationButton:disabled { opacity: .45; cursor: not-allowed; }
-.conversationButton { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 10px; border-radius: 8px; background: transparent; color: #687279; font-size: 13px; }
-.conversationButton:hover { background: #e8eff3; color: #263139; }
-.conversationButtonActive { background: #dfe8ee; color: #222d34; }
+.conversationItem { display: flex; align-items: center; min-width: 0; border-radius: 8px; color: #687279; }
+.conversationItem:hover { background: #e8eff3; color: #263139; }
+.conversationItemActive { background: #dfe8ee; color: #222d34; }
+.conversationButton { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; padding: 7px 4px 7px 10px; border-radius: 8px; background: transparent; font-size: 13px; }
+.conversationDeleteButton { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; margin-right: 4px; border: 0; border-radius: 6px; background: transparent; color: #8b969d; cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+.conversationItem:hover .conversationDeleteButton,
+.conversationDeleteButton:focus-visible { opacity: 1; }
+.conversationDeleteButton:hover:not(:disabled) { background: #dbe5eb; color: #9a3f3f; }
+.conversationDeleteButton:disabled { cursor: not-allowed; opacity: .35; }
 .statusDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #a0abb2; }
 .statusDotBusy { background: #6a9d33; box-shadow: 0 0 0 3px rgba(106,157,51,.14); }
 .conversationTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

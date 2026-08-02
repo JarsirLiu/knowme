@@ -20,6 +20,19 @@ export class ConversationService {
     return conversation
   }
 
+  async delete(id: string) {
+    const conversation = await this.get(id)
+    if (conversation.status === 'archived') return conversation
+
+    return prisma.conversation.update({
+      where: { id },
+      data: {
+        status: 'archived',
+        updatedAt: new Date(),
+      },
+    })
+  }
+
   async startTurn(data: {
     projectId: string
     message: string
@@ -77,6 +90,10 @@ export class ConversationService {
     clientMessageId: string
   }) {
     const conversation = await this.get(data.conversationId)
+    if (conversation.status !== 'active') {
+      throw new Error(`Conversation is not active: ${data.conversationId}`)
+    }
+
     const existing = await prisma.agentRun.findFirst({
       where: { conversationId: conversation.id, clientMessageId: data.clientMessageId },
     })

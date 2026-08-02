@@ -52,6 +52,12 @@ export class SuperagentClient {
     return (await res.json()) as ConversationTimelineResponse
   }
 
+  async deleteConversation(conversationId: string): Promise<void> {
+    await this.fetch(`/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+    })
+  }
+
   async *startDraftTurn(
     projectId: string,
     req: StartTurnRequest,
