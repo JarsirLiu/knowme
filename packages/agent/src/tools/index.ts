@@ -7,6 +7,8 @@ import { globTool } from './glob-search.js'
 import { grep } from './grep-search.js'
 import { runCommand } from './run-command.js'
 import { webFetch } from './web-fetch.js'
+import { gitStatus } from './git-status.js'
+import { gitDiff } from './git-diff.js'
 
 export function createTools(cfg: { autoApproveShell: boolean; workspace: string }): ReturnType<typeof tool>[] {
   const ws = cfg.workspace
@@ -19,5 +21,22 @@ export function createTools(cfg: { autoApproveShell: boolean; workspace: string 
     grep(ws),
     runCommand(cfg.autoApproveShell, ws),
     webFetch(),
+  ]
+}
+
+export function createReadOnlyTools(workspace: string): ReturnType<typeof tool>[] {
+  return [
+    listDir(workspace),
+    readFile(workspace),
+    globTool(workspace),
+    grep(workspace),
+  ]
+}
+
+export function createReviewTools(workspace: string): ReturnType<typeof tool>[] {
+  return [
+    ...createReadOnlyTools(workspace),
+    gitStatus(workspace),
+    gitDiff(workspace),
   ]
 }
