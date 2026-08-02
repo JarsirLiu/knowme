@@ -81,6 +81,10 @@ export class PrismaAgentSession implements Session {
         afterItems: 0,
         compactedItems: 0,
         keptItems: 0,
+        estimatedTokensBefore: 0,
+        estimatedTokensAfter: 0,
+        inputBudgetTokens: 0,
+        recentTokenBudget: 0,
       }
     }
     return compactSession(this.sessionId, this.compaction, trigger)

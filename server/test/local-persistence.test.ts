@@ -95,11 +95,14 @@ test('manual context compaction summarizes old session items and keeps recent it
     role: 'user',
     content: [{ type: 'input_text', text }],
   })) as any[]
-  const session = new PrismaAgentSession(sessionRecord.id, {
-    enabled: true,
-    itemThreshold: 3,
-    keepRecentItems: 2,
-    maxPromptChars: 4000,
+ const session = new PrismaAgentSession(sessionRecord.id, {
+   enabled: true,
+    contextWindowTokens: 100,
+    outputReserveTokens: 10,
+    safetyMarginTokens: 1,
+    triggerRatio: 0.9,
+    keepRecentTokens: 30,
+   maxPromptChars: 4000,
     summarizer: {
       async summarize(input) {
         return `summary for ${input.items.length} items`
@@ -109,16 +112,17 @@ test('manual context compaction summarizes old session items and keeps recent it
   await session.addItems(items)
 
   const result = await session.compact('manual')
-  assert.equal(result.status, 'compacted')
-  assert.equal(result.beforeItems, 5)
-  assert.equal(result.afterItems, 3)
-  assert.equal(result.compactedItems, 3)
+ assert.equal(result.status, 'compacted')
+ assert.equal(result.beforeItems, 5)
+  assert.equal(result.afterItems, 2)
+  assert.equal(result.compactedItems, 4)
+  assert.ok(result.estimatedTokensBefore >= 90)
 
   const compacted = await session.getItems()
-  assert.equal(compacted.length, 3)
-  assert.equal((compacted[0] as any).role, 'system')
-  assert.match(JSON.stringify(compacted[0]), /summary for 3 items/)
-  assert.deepEqual(compacted.slice(1), items.slice(-2))
+  assert.equal(compacted.length, 2)
+ assert.equal((compacted[0] as any).role, 'system')
+  assert.match(JSON.stringify(compacted[0]), /summary for 4 items/)
+  assert.deepEqual(compacted.slice(1), items.slice(-1))
 })
 
 test('approval decisions are persisted and can be observed by a waiter', async () => {

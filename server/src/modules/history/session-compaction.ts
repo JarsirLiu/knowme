@@ -9,8 +9,11 @@ export interface ContextSummarizer {
 
 export interface SessionCompactionOptions {
   enabled: boolean
-  itemThreshold: number
-  keepRecentItems: number
+  contextWindowTokens: number
+  outputReserveTokens: number
+  safetyMarginTokens: number
+  triggerRatio: number
+  keepRecentTokens: number
   maxPromptChars: number
   summarizer: ContextSummarizer
 }
@@ -25,6 +28,10 @@ export interface SessionCompactionResult {
   compactedItems: number
   keptItems: number
   summary?: string
+  estimatedTokensBefore: number
+  estimatedTokensAfter: number
+  inputBudgetTokens: number
+  recentTokenBudget: number
 }
 
 export class OpenAICompatibleContextSummarizer implements ContextSummarizer {
@@ -85,9 +92,12 @@ export function loadSessionCompactionOptions(): SessionCompactionOptions {
   const cfg = loadConfig()
   return {
     enabled: readBooleanEnv('SUPERAGENT_CONTEXT_AUTO_COMPACT', true),
-    itemThreshold: readNumberEnv('SUPERAGENT_CONTEXT_COMPACT_ITEM_THRESHOLD', 80),
-    keepRecentItems: readNumberEnv('SUPERAGENT_CONTEXT_COMPACT_KEEP_RECENT', 24),
-    maxPromptChars: readNumberEnv('SUPERAGENT_CONTEXT_COMPACT_MAX_CHARS', 12000),
+    contextWindowTokens: readNumberEnv('SUPERAGENT_CONTEXT_WINDOW_TOKENS', 64000),
+    outputReserveTokens: readNumberEnv('SUPERAGENT_CONTEXT_OUTPUT_RESERVE_TOKENS', 16000),
+    safetyMarginTokens: readNumberEnv('SUPERAGENT_CONTEXT_SAFETY_MARGIN_TOKENS', 1024),
+    triggerRatio: readRatioEnv('SUPERAGENT_CONTEXT_COMPACT_TRIGGER_RATIO', 0.9),
+    keepRecentTokens: readNumberEnv('SUPERAGENT_CONTEXT_COMPACT_KEEP_TOKENS', 20000),
+    maxPromptChars: readNumberEnv('SUPERAGENT_CONTEXT_COMPACT_MAX_CHARS', 50000),
     summarizer: new OpenAICompatibleContextSummarizer({
       baseURL: cfg.baseURL,
       apiKey: cfg.apiKey,
@@ -104,29 +114,36 @@ export async function compactSession(
 ): Promise<SessionCompactionResult> {
   const items = await readSessionItems(sessionId)
   const force = trigger === 'manual'
-  if (!force && !options.enabled) return skipped('auto compaction disabled', items.length)
-  if (!force && items.length < options.itemThreshold) {
-    return skipped('item threshold not reached', items.length)
+  const budget = createBudget(options)
+  const estimatedTokensBefore = estimateTokens(items)
+
+  if (!force && !options.enabled) {
+    return skipped('auto compaction disabled', items.length, estimatedTokensBefore, budget)
+  }
+  if (!force && estimatedTokensBefore < budget.compactBefore) {
+    return skipped('context token budget not reached', items.length, estimatedTokensBefore, budget)
   }
 
-  const keepRecentItems = Math.max(1, options.keepRecentItems)
-  if (items.length <= keepRecentItems + 1) {
-    return skipped('not enough history to compact', items.length)
+  const selection = selectRecentTail(items, options.keepRecentTokens)
+  if (!selection) {
+    return skipped('no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, budget)
   }
 
-  const compactedItems = items.slice(0, -keepRecentItems)
-  const recentItems = items.slice(-keepRecentItems)
+  const compactedItems = items.slice(0, selection.startIndex)
+  if (compactedItems.length === 0) {
+    return skipped('no historical turn available to compact', items.length, estimatedTokensBefore, budget)
+  }
+
   const summary = await options.summarizer.summarize({
     items: compactedItems,
     maxPromptChars: options.maxPromptChars,
   })
-
   const summaryItem = createSummaryItem(summary, {
     trigger,
     compactedItems: compactedItems.length,
-    keptItems: recentItems.length,
+    keptItems: selection.recentItems.length,
   })
-  const replacement = [summaryItem, ...recentItems]
+  const replacement = [summaryItem, ...selection.recentItems]
 
   await replaceSessionItems(sessionId, replacement)
 
@@ -135,8 +152,12 @@ export async function compactSession(
     beforeItems: items.length,
     afterItems: replacement.length,
     compactedItems: compactedItems.length,
-    keptItems: recentItems.length,
+    keptItems: selection.recentItems.length,
     summary,
+    estimatedTokensBefore,
+    estimatedTokensAfter: estimateTokens(replacement),
+    inputBudgetTokens: budget.inputBudgetTokens,
+    recentTokenBudget: options.keepRecentTokens,
   }
 }
 
@@ -154,6 +175,53 @@ export async function replaceSessionItems(sessionId: string, items: AgentInputIt
       })
     }
   })
+}
+
+async function readSessionItems(sessionId: string): Promise<AgentInputItem[]> {
+  const rows = await prisma.sessionItem.findMany({
+    where: { sessionId },
+    orderBy: { sequence: 'asc' },
+  })
+  return rows.map((row) => JSON.parse(row.payload) as AgentInputItem)
+}
+
+function createBudget(options: SessionCompactionOptions) {
+  const inputBudgetTokens = Math.max(
+    1,
+    options.contextWindowTokens - options.outputReserveTokens - options.safetyMarginTokens,
+  )
+  return {
+    inputBudgetTokens,
+    compactBefore: Math.max(1, Math.floor(inputBudgetTokens * options.triggerRatio)),
+  }
+}
+
+function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number) {
+  const userStarts = items.flatMap((item, index) => isUserMessage(item) ? [index] : [])
+  if (userStarts.length === 0) return undefined
+
+  let startIndex = items.length
+  let recentTokens = 0
+  for (let turnIndex = userStarts.length - 1; turnIndex >= 0; turnIndex -= 1) {
+    const turnStart = userStarts[turnIndex]
+    const candidateTokens = estimateTokens(items.slice(turnStart))
+    if (recentTokens > 0 && candidateTokens > keepRecentTokens) break
+    if (recentTokens === 0 && candidateTokens > keepRecentTokens) return undefined
+    startIndex = turnStart
+    recentTokens = candidateTokens
+  }
+
+  if (startIndex === items.length || startIndex === 0) return undefined
+  return {
+    startIndex,
+    recentItems: items.slice(startIndex),
+    recentTokens,
+  }
+}
+
+function isUserMessage(item: AgentInputItem): boolean {
+  const record = item as Record<string, unknown>
+  return record.type === 'message' && record.role === 'user'
 }
 
 function createSummaryItem(
@@ -212,15 +280,11 @@ function formatItemForSummary(item: AgentInputItem): string {
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return truncateMiddle(content, 1200)
   if (!Array.isArray(content)) return truncateMiddle(JSON.stringify(content), 1200)
-
-  return truncateMiddle(
-    content.map((part) => {
-      if (!part || typeof part !== 'object') return String(part)
-      const record = part as Record<string, unknown>
-      return String(record.text ?? record.content ?? JSON.stringify(record))
-    }).join('\n'),
-    1200,
-  )
+  return truncateMiddle(content.map((part) => {
+    if (!part || typeof part !== 'object') return String(part)
+    const record = part as Record<string, unknown>
+    return String(record.text ?? record.content ?? JSON.stringify(record))
+  }).join('\n'), 1200)
 }
 
 function truncateMiddle(value: string, maxChars: number): string {
@@ -229,15 +293,34 @@ function truncateMiddle(value: string, maxChars: number): string {
   return value.slice(0, half) + '\n...[truncated]...\n' + value.slice(-half)
 }
 
-async function readSessionItems(sessionId: string): Promise<AgentInputItem[]> {
-  const rows = await prisma.sessionItem.findMany({
-    where: { sessionId },
-    orderBy: { sequence: 'asc' },
-  })
-  return rows.map((row) => JSON.parse(row.payload) as AgentInputItem)
+function estimateTokens(value: unknown): number {
+  const text = typeof value === 'string' ? value : stringify(value)
+  let tokens = 0
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0
+    if (code <= 0x7f) tokens += /[\s]/u.test(character) ? 0.25 : 0.34
+    else if (code >= 0x2e80 && code <= 0x9fff) tokens += 0.75
+    else if (code >= 0xf900 && code <= 0xfaff) tokens += 0.75
+    else if (code >= 0x20000 && code <= 0x3134f) tokens += 0.75
+    else tokens += 0.75
+  }
+  return Math.max(1, Math.ceil(tokens))
 }
 
-function skipped(reason: string, itemCount: number): SessionCompactionResult {
+function stringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return String(value)
+  }
+}
+
+function skipped(
+  reason: string,
+  itemCount: number,
+  estimatedTokensBefore: number,
+  budget: { inputBudgetTokens: number; compactBefore: number },
+): SessionCompactionResult {
   return {
     status: 'skipped',
     reason,
@@ -245,6 +328,10 @@ function skipped(reason: string, itemCount: number): SessionCompactionResult {
     afterItems: itemCount,
     compactedItems: 0,
     keptItems: itemCount,
+    estimatedTokensBefore,
+    estimatedTokensAfter: estimatedTokensBefore,
+    inputBudgetTokens: budget.inputBudgetTokens,
+    recentTokenBudget: 0,
   }
 }
 
@@ -257,4 +344,9 @@ function readBooleanEnv(name: string, defaultValue: boolean): boolean {
 function readNumberEnv(name: string, defaultValue: number): number {
   const value = Number(process.env[name])
   return Number.isFinite(value) && value > 0 ? value : defaultValue
+}
+
+function readRatioEnv(name: string, defaultValue: number): number {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 && value <= 1 ? value : defaultValue
 }
