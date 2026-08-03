@@ -16,6 +16,10 @@ export class TimelineEventStore {
     return this.hub
   }
 
+  publish(event: AnyTimelineEvent): void {
+    this.hub.publish(event)
+  }
+
   async append<T extends TimelineEventType>(
     conversationId: string,
     runId: string | null,
@@ -25,7 +29,26 @@ export class TimelineEventStore {
     const event = await prisma.$transaction((tx) =>
       appendTimelineEvent(tx, conversationId, runId, type, data),
     )
-    this.hub.publish(event)
+    this.publish(event)
+    return event
+  }
+
+  async appendOwned<T extends TimelineEventType>(
+    conversationId: string,
+    runId: string,
+    leaseOwner: string,
+    type: T,
+    data: TimelineEventPayloadMap[T],
+  ): Promise<AnyTimelineEvent> {
+    const event = await prisma.$transaction(async (tx) => {
+      const ownedRun = await tx.agentRun.findFirst({
+        where: { id: runId, status: 'running', leaseOwner },
+        select: { id: true },
+      })
+      if (!ownedRun) throw new Error(`Run lease lost: ${runId}`)
+      return appendTimelineEvent(tx, conversationId, runId, type, data)
+    })
+    this.publish(event)
     return event
   }
 

@@ -23,6 +23,7 @@ const TABLES = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "nextRunSequence" INTEGER NOT NULL DEFAULT 0,
+    "activeRunId" TEXT,
     CONSTRAINT "Conversation_projectId_fkey"
       FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
@@ -198,7 +199,23 @@ async function initializeDatabase() {
   await addColumnIfMissing('AgentRun', 'cancelRequestedAt', 'DATETIME')
   await addColumnIfMissing('AgentRun', 'lastHeartbeatAt', 'DATETIME')
   await addColumnIfMissing('Conversation', 'nextRunSequence', 'INTEGER NOT NULL DEFAULT 0')
+  await addColumnIfMissing('Conversation', 'activeRunId', 'TEXT')
   await addColumnIfMissing('AgentRun', 'sequence', 'INTEGER NOT NULL DEFAULT 0')
+  const duplicateClaims = await prisma.$queryRawUnsafe<Array<{ activeRunId: string; count: bigint }>>(
+    'SELECT "activeRunId", COUNT(*) AS "count" FROM "Conversation" WHERE "activeRunId" IS NOT NULL GROUP BY "activeRunId" HAVING COUNT(*) > 1',
+  )
+  for (const duplicate of duplicateClaims) {
+    const conversations = await prisma.conversation.findMany({
+      where: { activeRunId: duplicate.activeRunId },
+      orderBy: { updatedAt: 'asc' },
+      select: { id: true },
+    })
+    await prisma.conversation.updateMany({
+      where: { id: { in: conversations.slice(1).map((conversation) => conversation.id) } },
+      data: { activeRunId: null },
+    })
+  }
+  await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Conversation_activeRunId_key" ON "Conversation"("activeRunId")')
 }
 
 async function addColumnIfMissing(table: string, column: string, definition: string) {

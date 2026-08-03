@@ -15,13 +15,22 @@ export class TimelineEventHub {
     listeners.add(listener)
     this.listeners.set(conversationId, listeners)
 
+    let unsubscribed = false
     return () => {
+      if (unsubscribed) return
+      unsubscribed = true
       listeners.delete(listener)
       if (listeners.size === 0) this.listeners.delete(conversationId)
     }
   }
 
   publish(event: AnyTimelineEvent): void {
-    for (const listener of this.listeners.get(event.conversationId) ?? []) listener(event)
+    for (const listener of [...(this.listeners.get(event.conversationId) ?? [])]) {
+      try {
+        listener(event)
+      } catch {
+        // A disconnected SSE client must not make the durable append fail.
+      }
+    }
   }
 }

@@ -14,12 +14,13 @@ export async function persistRunStreamEvent(
   runId: string,
   event: RunStreamEvent,
   state: StreamEventState,
+  leaseOwner?: string,
 ): Promise<void> {
   if (event.type === 'raw_model_stream_event') {
     const delta = extractRawStreamDelta(event, runId)
     if (!delta) return
     if (delta.type === 'reasoning.delta') state.sawReasoningDelta = true
-    await append(store, conversationId, runId, delta.type, delta.data)
+    await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
     return
   }
 
@@ -30,16 +31,16 @@ export async function persistRunStreamEvent(
 
   if (event.name === 'tool_called' && item.type === 'tool_call_item') {
     const id = String(raw.callId ?? raw.id ?? 'unknown')
-    await append(store, conversationId, runId, 'tool.called', {
-      messageId: runId,
-      toolCallId: id,
-      name: String(raw.name ?? 'unknown'),
-    })
+      await append(store, conversationId, runId, 'tool.called', {
+        messageId: runId,
+        toolCallId: id,
+        name: String(raw.name ?? 'unknown'),
+      }, leaseOwner)
     if (raw.arguments !== undefined) {
       await append(store, conversationId, runId, 'tool.arguments', {
         toolCallId: id,
         args: parseToolArguments(raw.arguments),
-      })
+      }, leaseOwner)
     }
   }
 
@@ -47,7 +48,7 @@ export async function persistRunStreamEvent(
     await append(store, conversationId, runId, 'tool.output', {
       toolCallId: String(raw.callId ?? raw.id ?? 'unknown'),
       result: raw.output,
-    })
+    }, leaseOwner)
   }
 
   if (!state.sawReasoningDelta && event.name === 'reasoning_item_created' && item.type === 'reasoning_item') {
@@ -56,7 +57,7 @@ export async function persistRunStreamEvent(
       await append(store, conversationId, runId, 'reasoning.delta', {
         messageId: getStreamMessageId(raw, undefined, runId),
         text,
-      })
+      }, leaseOwner)
     }
   }
 }
@@ -101,7 +102,12 @@ async function append<T extends TimelineEventType>(
   runId: string,
   type: T,
   data: TimelineEventPayloadMap[T],
+  leaseOwner?: string,
 ) {
+  if (leaseOwner) {
+    await store.appendOwned(conversationId, runId, leaseOwner, type, data)
+    return
+  }
   await store.append(conversationId, runId, type, data)
 }
 

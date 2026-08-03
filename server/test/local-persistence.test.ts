@@ -13,6 +13,8 @@ import { PrismaAgentSession } from '../src/modules/history/agent-session-store.j
 import { persistCompactionMessage } from '../src/modules/history/session-compaction.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
 import { extractRawStreamDelta } from '../src/modules/chat/turn.service.js'
+import { RunCoordinator } from '../src/modules/runs/run-coordinator.js'
+import { TimelineEventHub } from '../src/modules/events/timeline-event-hub.js'
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
 let projectId: string
@@ -228,6 +230,83 @@ test('approval decisions are persisted durably for coordinator recovery', async 
   assert.equal(await approvals.approve(run.conversationId, toolCallId), true)
   assert.equal((await prisma.approval.findUnique({ where: { toolCallId } }))?.status, 'approved')
   assert.equal((await approvals.getPendingForRun(run.id)).length, 0)
+})
+
+test('conversation active-run reservation allows only one concurrent claim', async () => {
+  await prisma.agentRun.updateMany({
+    where: { status: 'queued' },
+    data: { status: 'cancelled', finishedAt: new Date() },
+  })
+  const conversations = new ConversationService(timelineStore)
+  const first = await conversations.startTurn({
+    projectId,
+    message: 'claim first',
+    clientMessageId: 'test-claim-message-1',
+  })
+  const second = await conversations.continueTurn({
+    conversationId: first.conversation.id,
+    message: 'claim second',
+    clientMessageId: 'test-claim-message-2',
+  })
+  const coordinatorA = new RunCoordinator(conversations, new ApprovalService(), timelineStore)
+  const coordinatorB = new RunCoordinator(conversations, new ApprovalService(), timelineStore)
+  const claimNext = (coordinator: RunCoordinator) => (coordinator as unknown as {
+    claimNext: () => Promise<{ id: string } | null>
+  }).claimNext()
+
+  const claims = await Promise.all([claimNext(coordinatorA), claimNext(coordinatorB)])
+  assert.equal(claims.filter(Boolean).length, 1)
+  const claimed = claims.find((claim): claim is { id: string } => Boolean(claim))
+  assert.ok(claimed)
+  assert.equal((await prisma.conversation.findUnique({ where: { id: first.conversation.id } }))?.activeRunId, claimed.id)
+  assert.equal((await prisma.agentRun.count({ where: { conversationId: first.conversation.id, status: 'running' } })), 1)
+  assert.equal((await prisma.agentRun.findUnique({ where: { id: second.run.id } }))?.status, 'queued')
+  await assert.rejects(
+    timelineStore.appendOwned(first.conversation.id, claimed.id, 'stale-coordinator', 'run.started', {}),
+    /Run lease lost/,
+  )
+})
+
+test('restart marks waiting approval without state as interrupted', async () => {
+  const conversations = new ConversationService(timelineStore)
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'recover approval state',
+    clientMessageId: 'test-recovery-message-1',
+  })
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: { status: 'waiting_approval', state: null },
+  })
+  await prisma.conversation.update({ where: { id: turn.conversation.id }, data: { activeRunId: turn.run.id } })
+
+  const coordinator = new RunCoordinator(conversations, new ApprovalService(), timelineStore)
+  await (coordinator as unknown as { recoverAfterRestart: () => Promise<void> }).recoverAfterRestart()
+
+  const recovered = await prisma.agentRun.findUnique({ where: { id: turn.run.id } })
+  assert.equal(recovered?.status, 'interrupted')
+  assert.equal((await prisma.conversation.findUnique({ where: { id: turn.conversation.id } }))?.activeRunId, null)
+  assert.equal((await timelineStore.list(turn.conversation.id)).at(-1)?.type, 'run.interrupted')
+})
+
+test('timeline hub isolates disconnected listeners and cleans subscriptions', () => {
+  const hub = new TimelineEventHub()
+  let calls = 0
+  const unsubscribe = hub.subscribe('conversation-1', () => { throw new Error('socket closed') })
+  hub.subscribe('conversation-1', () => { calls += 1 })
+  hub.publish({
+    id: 'event-1',
+    conversationId: 'conversation-1',
+    runId: null,
+    sequence: 1,
+    type: 'run.started',
+    data: {},
+    createdAt: new Date().toISOString(),
+  })
+  assert.equal(calls, 1)
+  unsubscribe()
+  unsubscribe()
+  assert.equal((hub as unknown as { listeners: Map<string, Set<unknown>> }).listeners.get('conversation-1')?.size, 1)
 })
 
 test('conversation delete archives it without losing persisted history', async () => {

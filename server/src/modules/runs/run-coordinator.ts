@@ -8,6 +8,7 @@ import { AgentRunExecutor } from '../chat/agent-run-executor.js'
 
 const LEASE_MS = 30_000
 const POLL_MS = 500
+const ACTIVE_STATUSES = ['running', 'waiting_approval']
 
 /** Owns durable AgentRun execution. HTTP handlers only enqueue work. */
 export class RunCoordinator {
@@ -65,6 +66,7 @@ export class RunCoordinator {
         where: { id: runId },
         data: { status: 'cancelled', finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null },
       })
+      await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: runId }, data: { activeRunId: null } })
       await this.timelineStore.append(run.conversationId, runId, 'run.cancelled', { error: 'Run cancelled by user' })
     }
     return true
@@ -74,6 +76,8 @@ export class RunCoordinator {
     if (this.stopping || this.ticking) return
     this.ticking = true
     try {
+      await this.refreshOwnedLeases()
+      await this.recoverExpiredRuns()
       await this.promoteResolvedApprovals()
       for (;;) {
         const claimed = await this.claimNext()
@@ -95,6 +99,7 @@ export class RunCoordinator {
         where: { id: run.id, status: 'waiting_approval' },
         data: { status: 'queued', leaseOwner: null, leaseExpiresAt: null, lastHeartbeatAt: new Date() },
       })
+      await prisma.conversation.updateMany({ where: { activeRunId: run.id }, data: { activeRunId: null } })
     }
   }
 
@@ -106,14 +111,45 @@ export class RunCoordinator {
     })
     for (const candidate of candidates) {
       const claimed = await prisma.$transaction(async (tx) => {
+        // Take the conversation row write lock before checking active runs. The
+        // conditional activeRunId update alone is not enough under SQLite's
+        // deferred transaction snapshots when two coordinators start together.
+        const conversation = await tx.conversation.update({
+          where: { id: candidate.conversationId },
+          data: { updatedAt: new Date() },
+          select: { activeRunId: true },
+        })
+
+        if (conversation.activeRunId) {
+          const activeRun = await tx.agentRun.findUnique({
+            where: { id: conversation.activeRunId },
+            select: { status: true },
+          })
+          if (activeRun && ACTIVE_STATUSES.includes(activeRun.status)) return null
+          await tx.conversation.updateMany({
+            where: { id: candidate.conversationId, activeRunId: conversation.activeRunId },
+            data: { activeRunId: null },
+          })
+        }
+
+        const reserved = await tx.conversation.updateMany({
+          where: { id: candidate.conversationId, activeRunId: null },
+          data: { activeRunId: candidate.id },
+        })
+        if (reserved.count !== 1) return null
+
         const active = await tx.agentRun.findFirst({
           where: {
             conversationId: candidate.conversationId,
-            status: { in: ['running', 'waiting_approval'] },
+            status: { in: ACTIVE_STATUSES },
+            id: { not: candidate.id },
           },
           select: { id: true },
         })
-        if (active) return null
+        if (active) {
+          await tx.conversation.updateMany({ where: { id: candidate.conversationId, activeRunId: candidate.id }, data: { activeRunId: null } })
+          return null
+        }
         const updated = await tx.agentRun.updateMany({
           where: { id: candidate.id, status: 'queued' },
           data: {
@@ -125,7 +161,11 @@ export class RunCoordinator {
             lastHeartbeatAt: new Date(),
           },
         })
-        return updated.count === 1 ? tx.agentRun.findUnique({ where: { id: candidate.id } }) : null
+        if (updated.count !== 1) {
+          await tx.conversation.updateMany({ where: { id: candidate.conversationId, activeRunId: candidate.id }, data: { activeRunId: null } })
+          return null
+        }
+        return tx.agentRun.findUnique({ where: { id: candidate.id } })
       })
       if (claimed) return claimed
     }
@@ -139,10 +179,10 @@ export class RunCoordinator {
       const run = await prisma.agentRun.findUnique({ where: { id: runId } })
       if (!run) return
       const resumed = run.attempt > 1 || Boolean(run.state)
-      await this.executor.execute(runId, controller.signal, resumed)
+      await this.executor.execute(runId, controller.signal, resumed, this.owner)
     } catch (error) {
       const current = await prisma.agentRun.findUnique({ where: { id: runId } })
-      if (!current || ['completed', 'waiting_approval', 'cancelled'].includes(current.status)) return
+      if (!current || current.status !== 'running' || current.leaseOwner !== this.owner) return
       const cancelled = controller.signal.aborted || Boolean(current.cancelRequestedAt)
       const message = cancelled ? 'Run cancelled by user' : error instanceof Error ? error.message : String(error)
       await prisma.agentRun.update({
@@ -155,6 +195,7 @@ export class RunCoordinator {
           leaseExpiresAt: null,
         },
       })
+      await prisma.conversation.updateMany({ where: { id: current.conversationId, activeRunId: runId }, data: { activeRunId: null } })
       await this.timelineStore.append(current.conversationId, runId, cancelled ? 'run.cancelled' : 'run.failed', { error: message })
     } finally {
       this.controllers.delete(runId)
@@ -163,18 +204,22 @@ export class RunCoordinator {
   }
 
   private async recoverAfterRestart(): Promise<void> {
+    const now = new Date()
     const running = await prisma.agentRun.findMany({ where: { status: 'running' } })
     for (const run of running) {
+      if (run.leaseExpiresAt && run.leaseExpiresAt > now) continue
       if (run.state) {
         await prisma.agentRun.update({
           where: { id: run.id },
           data: { status: 'queued', leaseOwner: null, leaseExpiresAt: null, lastHeartbeatAt: new Date() },
         })
+        await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
       } else {
         await prisma.agentRun.update({
           where: { id: run.id },
           data: { status: 'interrupted', error: 'Server restarted before a resumable checkpoint was saved', finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null },
         })
+        await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
         await this.timelineStore.append(run.conversationId, run.id, 'run.interrupted', {
           error: 'Server restarted before a resumable checkpoint was saved',
         })
@@ -183,10 +228,54 @@ export class RunCoordinator {
 
     const waiting = await prisma.agentRun.findMany({ where: { status: 'waiting_approval' } })
     for (const run of waiting) {
-      if (!run.state) continue
+      if (!run.state) {
+        const error = 'Run reached waiting_approval without a resumable checkpoint'
+        await prisma.agentRun.update({
+          where: { id: run.id },
+          data: { status: 'interrupted', error, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null },
+        })
+        await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
+        await this.timelineStore.append(run.conversationId, run.id, 'run.interrupted', { error })
+        continue
+      }
       if ((await this.approvalService.getPendingForRun(run.id)).length === 0) {
         await prisma.agentRun.update({ where: { id: run.id }, data: { status: 'queued', leaseOwner: null, leaseExpiresAt: null } })
+        await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
+      } else {
+        await prisma.agentRun.update({ where: { id: run.id }, data: { leaseOwner: null, leaseExpiresAt: null } })
+        await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
       }
+    }
+  }
+
+  private async refreshOwnedLeases(): Promise<void> {
+    const runIds = [...this.controllers.keys()]
+    if (runIds.length === 0) return
+    const now = new Date()
+    await prisma.agentRun.updateMany({
+      where: { id: { in: runIds }, status: 'running', leaseOwner: this.owner },
+      data: { leaseExpiresAt: new Date(now.getTime() + LEASE_MS), lastHeartbeatAt: now },
+    })
+  }
+
+  private async recoverExpiredRuns(): Promise<void> {
+    const expired = await prisma.agentRun.findMany({
+      where: { status: 'running', leaseExpiresAt: { lte: new Date() } },
+    })
+    for (const run of expired) {
+      const error = 'Run lease expired before a resumable checkpoint was saved'
+      const updated = run.state
+        ? await prisma.agentRun.updateMany({
+          where: { id: run.id, status: 'running', leaseExpiresAt: { lte: new Date() } },
+          data: { status: 'queued', leaseOwner: null, leaseExpiresAt: null, lastHeartbeatAt: new Date() },
+        })
+        : await prisma.agentRun.updateMany({
+          where: { id: run.id, status: 'running', leaseExpiresAt: { lte: new Date() } },
+          data: { status: 'interrupted', error, finishedAt: new Date(), leaseOwner: null, leaseExpiresAt: null },
+        })
+      if (updated.count !== 1) continue
+      await prisma.conversation.updateMany({ where: { id: run.conversationId, activeRunId: run.id }, data: { activeRunId: null } })
+      if (!run.state) await this.timelineStore.append(run.conversationId, run.id, 'run.interrupted', { error })
     }
   }
 }

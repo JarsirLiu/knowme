@@ -26,6 +26,7 @@ model Conversation {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   nextRunSequence Int        @default(0)
+  activeRunId  String?
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agentSession AgentSession?
   messages     Message[]
@@ -34,6 +35,7 @@ model Conversation {
   timelineEvents TimelineEvent[]
 
   @@index([projectId, updatedAt])
+  @@unique([activeRunId])
 }
 
 model AgentSession {

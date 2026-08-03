@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { TurnService } from '../chat/turn.service.js'
 import type { ConversationService } from '../conversations/conversation.service.js'
 import type { ProjectService } from './project.service.js'
-import type { DirectoryService } from './directory.service.js'
+import { DirectoryAccessError, type DirectoryService } from './directory.service.js'
 
 export function registerProjectRoutes(
   app: FastifyInstance,
@@ -18,7 +18,11 @@ export function registerProjectRoutes(
       return reply.send(await directoryService.list(requestedPath))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return reply.status(400).send({ error: `无法读取目录：${message}` })
+      if (error instanceof DirectoryAccessError) {
+        const status = error.code === 'not_found' ? 404 : error.code === 'permission_denied' ? 403 : 400
+        return reply.status(status).send({ code: error.code, error: message })
+      }
+      return reply.status(400).send({ code: 'invalid_path', error: `无法读取目录：${message}` })
     }
   })
 

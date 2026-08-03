@@ -3,10 +3,27 @@ import os from 'node:os'
 import path from 'node:path'
 import type { DirectoryListing } from '@superagent/core'
 
+export type DirectoryErrorCode = 'not_found' | 'permission_denied' | 'invalid_path'
+
+export class DirectoryAccessError extends Error {
+  constructor(
+    message: string,
+    public readonly code: DirectoryErrorCode,
+  ) {
+    super(message)
+    this.name = 'DirectoryAccessError'
+  }
+}
+
 export class DirectoryService {
   async list(inputPath?: string): Promise<DirectoryListing> {
     const currentPath = path.resolve(inputPath?.trim() || os.homedir())
-    const entries = await fs.readdir(currentPath, { withFileTypes: true })
+    let entries
+    try {
+      entries = await fs.readdir(currentPath, { withFileTypes: true })
+    } catch (error) {
+      throw toDirectoryAccessError(currentPath, error)
+    }
     const directories = entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => ({
@@ -42,4 +59,17 @@ export class DirectoryService {
     if (!roots.includes(currentRoot)) roots.push(currentRoot)
     return roots
   }
+}
+
+function toDirectoryAccessError(currentPath: string, error: unknown): DirectoryAccessError {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: string }).code
+    : undefined
+  if (code === 'ENOENT' || code === 'ENOTDIR') {
+    return new DirectoryAccessError(`目录不存在：${currentPath}`, 'not_found')
+  }
+  if (code === 'EACCES' || code === 'EPERM') {
+    return new DirectoryAccessError(`没有权限读取目录：${currentPath}`, 'permission_denied')
+  }
+  return new DirectoryAccessError(`目录路径无效：${currentPath}`, 'invalid_path')
 }

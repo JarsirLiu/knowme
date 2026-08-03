@@ -45,22 +45,27 @@ export class TurnService {
     let replaying = true
     let latestSequence = sequence
     const buffered = new Map<number, AnyTimelineEvent>()
+    let closed = reply.raw.writableEnded
+    const close = () => {
+      closed = true
+    }
+    reply.raw.once('close', close)
     const unsubscribe = this.timelineStore.eventHub.subscribe(conversationId, (event) => {
       if (replaying) {
         if (event.sequence > latestSequence) buffered.set(event.sequence, event)
         return
       }
-      if (event.sequence <= latestSequence || reply.raw.writableEnded) return
+      if (event.sequence <= latestSequence || closed || reply.raw.writableEnded) return
       latestSequence = event.sequence
       sendSSE(reply, event)
     })
     const heartbeat = setInterval(() => {
-      if (!reply.raw.writableEnded) reply.raw.write(': heartbeat\n\n')
+      if (!closed && !reply.raw.writableEnded) reply.raw.write(': heartbeat\n\n')
     }, 15_000)
     try {
       const events = await this.timelineStore.listAfter(conversationId, sequence)
       for (const event of events) {
-        if (event.sequence <= latestSequence || reply.raw.writableEnded) continue
+        if (event.sequence <= latestSequence || closed || reply.raw.writableEnded) continue
         latestSequence = event.sequence
         sendSSE(reply, event)
       }
@@ -70,13 +75,11 @@ export class TurnService {
         latestSequence = event.sequence
         sendSSE(reply, event)
       }
-      await new Promise<void>((resolve) => {
-        const close = () => resolve()
-        reply.raw.once('close', close)
-      })
+      if (!closed) await new Promise<void>((resolve) => reply.raw.once('close', resolve))
     } finally {
       unsubscribe()
       clearInterval(heartbeat)
+      reply.raw.removeListener('close', close)
       if (!reply.raw.writableEnded) reply.raw.end()
     }
   }

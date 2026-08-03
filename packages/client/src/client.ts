@@ -22,6 +22,8 @@ export interface SuperagentClientOptions {
   baseUrl: string
 }
 
+export const MAX_EVENT_RECONNECT_ATTEMPTS = 8
+
 export class SuperagentClient {
   private baseUrl: string
 
@@ -115,6 +117,8 @@ export class SuperagentClient {
   ): AsyncGenerator<SSEEvent> {
     let cursor = lastEventId
     let retryMs = 500
+    let reconnectAttempts = 0
+    let lastError: unknown
     while (!signal?.aborted) {
       try {
         const res = await this.fetch(`/api/conversations/${conversationId}/events`, {
@@ -127,13 +131,22 @@ export class SuperagentClient {
         for await (const event of parseSSEStream(res)) {
           cursor = event.id
           retryMs = 500
+          reconnectAttempts = 0
+          lastError = undefined
           yield event
         }
       } catch (error) {
         if (signal?.aborted) return
         if (error instanceof SuperagentClientError && error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode < 500) throw error
+        lastError = error
       }
       if (signal?.aborted) return
+      reconnectAttempts += 1
+      if (reconnectAttempts >= MAX_EVENT_RECONNECT_ATTEMPTS) {
+        throw lastError instanceof Error
+          ? lastError
+          : new Error(`Event stream reconnect limit reached (${MAX_EVENT_RECONNECT_ATTEMPTS})`)
+      }
       await new Promise((resolve) => setTimeout(resolve, retryMs))
       retryMs = Math.min(retryMs * 2, 5_000)
     }
