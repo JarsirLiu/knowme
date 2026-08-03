@@ -4,6 +4,7 @@ import {
   loadSessionCompactionOptions,
   persistCompactionMessage,
 } from '../history/session-compaction.js'
+import { appendTimelineEvent, TimelineEventStore } from '../events/timeline-event-store.js'
 
 function titleFromMessage(message: string): string {
   const title = message.replace(/\s+/g, ' ').trim()
@@ -12,6 +13,8 @@ function titleFromMessage(message: string): string {
 }
 
 export class ConversationService {
+  constructor(private readonly timelineStore: TimelineEventStore) {}
+
   async list(projectId: string) {
     return prisma.conversation.findMany({
       where: { projectId, status: 'active' },
@@ -57,6 +60,7 @@ export class ConversationService {
         data: {
           projectId: data.projectId,
           title: titleFromMessage(data.message),
+          nextRunSequence: 1,
         },
       })
 
@@ -71,12 +75,13 @@ export class ConversationService {
         data: {
           conversationId: conversation.id,
           clientMessageId: data.clientMessageId,
+          sequence: 1,
           status: 'queued',
           input: data.message,
         },
       })
 
-      await tx.message.create({
+      const userMessage = await tx.message.create({
         data: {
           conversationId: conversation.id,
           runId: run.id,
@@ -85,7 +90,20 @@ export class ConversationService {
         },
       })
 
-      return { conversation, run, created: true }
+      const startedEvent = await appendTimelineEvent(
+        tx,
+        conversation.id,
+        run.id,
+        'turn.started',
+        {
+          title: conversation.title,
+          userMessageId: userMessage.id,
+          userText: data.message,
+          assistantMessageId: run.id,
+        },
+      )
+
+      return { conversation, run, created: true, startedEvent }
     })
   }
 
@@ -104,17 +122,24 @@ export class ConversationService {
     })
     if (existing) return { conversation, run: existing, created: false }
 
-    const run = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      const sequence = (await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { nextRunSequence: { increment: 1 } },
+        select: { nextRunSequence: true },
+      })).nextRunSequence
+
       const nextRun = await tx.agentRun.create({
         data: {
           conversationId: conversation.id,
           clientMessageId: data.clientMessageId,
+          sequence,
           status: 'queued',
           input: data.message,
         },
       })
 
-      await tx.message.create({
+      const userMessage = await tx.message.create({
         data: {
           conversationId: conversation.id,
           runId: nextRun.id,
@@ -128,23 +153,33 @@ export class ConversationService {
         data: { updatedAt: new Date() },
       })
 
-      return nextRun
+      const startedEvent = await appendTimelineEvent(
+        tx,
+        conversation.id,
+        nextRun.id,
+        'turn.started',
+        {
+          title: conversation.title,
+          userMessageId: userMessage.id,
+          userText: data.message,
+          assistantMessageId: nextRun.id,
+        },
+      )
+
+      return { run: nextRun, startedEvent }
     })
 
-    return { conversation, run, created: true }
+    return { conversation, run: result.run, created: true, startedEvent: result.startedEvent }
   }
 
   async getTimeline(id: string) {
     const conversation = await this.get(id)
-    const messages = await prisma.message.findMany({
-      where: { conversationId: id },
-      orderBy: { createdAt: 'asc' },
-    })
-
-    return {
-      conversation,
-      messages: messages.map((message) => decodeTimelineMessage(message)),
+    let events = await this.timelineStore.list(id)
+    if (events.length === 0) {
+      await this.backfillLegacyTimeline(id, conversation.title)
+      events = await this.timelineStore.list(id)
     }
+    return { conversation, events }
   }
 
   async compactContext(id: string) {
@@ -164,13 +199,36 @@ export class ConversationService {
     }
 
     const sessionId = await this.getSessionId(id)
-    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions())
+    const events: import('@superagent/core').AnyTimelineEvent[] = []
+    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), {
+      started: async ({ id: compactionId, trigger }) => {
+        events.push(await this.timelineStore.append(id, null, 'context_compaction.started', {
+          id: compactionId,
+          trigger,
+        }))
+      },
+      completed: async ({ id: compactionId, trigger, result }) => {
+        events.push(await this.timelineStore.append(id, null, 'context_compaction.completed', {
+          id: compactionId,
+          trigger,
+          compactedItems: result.compactedItems,
+          keptItems: result.keptItems,
+          reason: result.reason,
+        }))
+      },
+      failed: async ({ id: compactionId, trigger, error }) => {
+        events.push(await this.timelineStore.append(id, null, 'context_compaction.failed', {
+          id: compactionId,
+          trigger,
+          error,
+        }))
+      },
+    })
     const result = await session.compact('manual')
-    if (result.status === 'compacted') {
-      await persistCompactionMessage(sessionId, result)
-      await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
-    }
-    return result
+    if (result.status !== 'compacted') return { ...result, events }
+    await persistCompactionMessage(sessionId, result)
+    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    return { ...result, events }
   }
 
   async getSessionId(conversationId: string): Promise<string> {
@@ -180,38 +238,94 @@ export class ConversationService {
     if (!session) throw new Error(`Agent session not found for conversation: ${conversationId}`)
     return session.id
   }
+
+  private async backfillLegacyTimeline(conversationId: string, title: string) {
+    await prisma.$transaction(async (tx) => {
+      if (await tx.timelineEvent.count({ where: { conversationId } }) > 0) return
+
+      const messages = await tx.message.findMany({
+        where: { conversationId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      })
+
+      for (const message of messages) {
+        if (message.role === 'user') {
+          await appendTimelineEvent(
+            tx,
+            conversationId,
+            message.runId,
+            'turn.started',
+            {
+              title,
+              userMessageId: message.id,
+              userText: message.content,
+              assistantMessageId: message.runId ?? 'legacy-assistant-' + message.id,
+            },
+          )
+          continue
+        }
+
+        if (message.role === 'assistant') {
+          if (message.content) {
+            await appendTimelineEvent(
+              tx,
+              conversationId,
+              message.runId,
+              'message.delta',
+              { messageId: message.id, text: message.content },
+            )
+          }
+          if (message.runId) {
+            await appendTimelineEvent(
+              tx,
+              conversationId,
+              message.runId,
+              'run.completed',
+              { output: message.content },
+            )
+          }
+          continue
+        }
+
+        if (message.role === 'system') {
+          const payload = parseCompactionPayload(message.content)
+          if (!payload) continue
+          await appendTimelineEvent(
+            tx,
+            conversationId,
+            message.runId,
+            'context_compaction.completed',
+            {
+              id: message.id,
+              trigger: payload.trigger,
+              compactedItems: payload.compactedItems,
+              keptItems: payload.keptItems,
+              reason: payload.reason,
+            },
+          )
+        }
+      }
+    })
+  }
 }
 
-function decodeTimelineMessage(message: {
-  id: string
-  runId: string | null
-  role: string
-  content: string
-  createdAt: Date
-}) {
-  if (message.role !== 'system') return message
-
+function parseCompactionPayload(content: string): {
+  trigger: 'auto' | 'manual'
+  compactedItems: number
+  keptItems: number
+  reason?: string
+} | undefined {
   try {
-    const payload = JSON.parse(message.content) as Record<string, unknown>
-    if (payload.kind !== 'context_compaction') return message
+    const payload = JSON.parse(content) as Record<string, unknown>
+    if (payload.kind !== 'context_compaction') return undefined
     return {
-      id: message.id,
-      runId: message.runId,
-      role: 'system' as const,
-      content: '',
-      kind: 'context_compaction' as const,
-      trigger: payload.trigger === 'manual' ? 'manual' as const : 'auto' as const,
-      compactionStatus: payload.status === 'failed' ? 'failed' as const : 'completed' as const,
-      compactedItems: numberValue(payload.compactedItems),
-      keptItems: numberValue(payload.keptItems),
-      estimatedTokensBefore: numberValue(payload.estimatedTokensBefore),
-      estimatedTokensAfter: numberValue(payload.estimatedTokensAfter),
-      predictedInputTokens: numberValue(payload.predictedInputTokens),
-      inputBudgetTokens: numberValue(payload.inputBudgetTokens),
-      createdAt: message.createdAt,
+      trigger: payload.trigger === 'manual' ? 'manual' : 'auto',
+      compactedItems: numberValue(payload.compactedItems) ?? 0,
+      keptItems: numberValue(payload.keptItems) ?? 0,
+      reason: typeof payload.reason === 'string' ? payload.reason : undefined,
     }
   } catch {
-    return message
+    return undefined
   }
 }
 

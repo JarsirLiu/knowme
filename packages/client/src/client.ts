@@ -2,6 +2,8 @@ import type {
   Conversation,
   ConversationListResponse,
   ConversationTimelineResponse,
+  DirectoryListingResponse,
+  AnyTimelineEvent,
   CreateProjectRequest,
   Device,
   DeviceListResponse,
@@ -11,6 +13,7 @@ import type {
   ProjectResponse,
   StartTurnRequest,
   SSEEvent,
+  StartTurnResult,
 } from '@superagent/core'
 import { parseSSEStream } from './sse-parser.js'
 import { SuperagentClientError } from './errors.js'
@@ -30,6 +33,12 @@ export class SuperagentClient {
     const res = await this.fetch('/api/projects')
     const data = (await res.json()) as ProjectListResponse
     return data.projects
+  }
+
+  async listDirectories(directory?: string): Promise<DirectoryListingResponse> {
+    const query = directory ? `?path=${encodeURIComponent(directory)}` : ''
+    const res = await this.fetch(`/api/directories${query}`)
+    return (await res.json()) as DirectoryListingResponse
   }
 
   async createProject(req: CreateProjectRequest): Promise<Project> {
@@ -63,6 +72,7 @@ export class SuperagentClient {
     compactedItems: number
     keptItems: number
     reason?: string
+    events: AnyTimelineEvent[]
   }> {
     const res = await this.fetch(`/api/conversations/${conversationId}/context/compact`, {
       method: 'POST',
@@ -72,35 +82,61 @@ export class SuperagentClient {
       compactedItems: number
       keptItems: number
       reason?: string
+      events: AnyTimelineEvent[]
     }
   }
 
-  async *startDraftTurn(
+  async startDraftTurn(
     projectId: string,
     req: StartTurnRequest,
-    signal?: AbortSignal,
-  ): AsyncGenerator<SSEEvent> {
+  ): Promise<StartTurnResult> {
     const res = await this.fetch(`/api/projects/${projectId}/turns`, {
       method: 'POST',
-      headers: { Accept: 'text/event-stream' },
-      signal,
       body: JSON.stringify(req),
     })
-    yield* parseSSEStream(res)
+    return (await res.json()) as StartTurnResult
   }
 
-  async *continueTurn(
+  async continueTurn(
     conversationId: string,
     req: StartTurnRequest,
-    signal?: AbortSignal,
-  ): AsyncGenerator<SSEEvent> {
+  ): Promise<StartTurnResult> {
     const res = await this.fetch(`/api/conversations/${conversationId}/turns`, {
       method: 'POST',
-      headers: { Accept: 'text/event-stream' },
-      signal,
       body: JSON.stringify(req),
     })
-    yield* parseSSEStream(res)
+    return (await res.json()) as StartTurnResult
+  }
+
+  async *subscribeConversationEvents(
+    conversationId: string,
+    signal?: AbortSignal,
+    lastEventId?: string,
+  ): AsyncGenerator<SSEEvent> {
+    let cursor = lastEventId
+    let retryMs = 500
+    while (!signal?.aborted) {
+      try {
+        const res = await this.fetch(`/api/conversations/${conversationId}/events`, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(cursor ? { 'Last-Event-ID': cursor } : {}),
+          },
+          signal,
+        })
+        for await (const event of parseSSEStream(res)) {
+          cursor = event.id
+          retryMs = 500
+          yield event
+        }
+      } catch (error) {
+        if (signal?.aborted) return
+        if (error instanceof SuperagentClientError && error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode < 500) throw error
+      }
+      if (signal?.aborted) return
+      await new Promise((resolve) => setTimeout(resolve, retryMs))
+      retryMs = Math.min(retryMs * 2, 5_000)
+    }
   }
 
   async approveToolCall(conversationId: string, toolCallId: string): Promise<void> {
@@ -113,6 +149,10 @@ export class SuperagentClient {
     await this.fetch(`/api/conversations/${conversationId}/approvals/${toolCallId}/deny`, {
       method: 'POST',
     })
+  }
+
+  async cancelRun(conversationId: string, runId: string): Promise<void> {
+    await this.fetch(`/api/conversations/${conversationId}/runs/${runId}/cancel`, { method: 'POST' })
   }
 
   async listDevices(): Promise<Device[]> {

@@ -16,36 +16,3 @@ export interface Conversation {
   createdAt: string
   updatedAt: string
 }
-
-export interface TimelineToolCall {
-  id: string
-  name: string
-  args: unknown
-  status: string
-  result?: unknown
-  error?: string
-}
-
-export interface TimelineMessage {
-  id: string
-  runId?: string | null
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  toolCalls?: TimelineToolCall[]
-  createdAt: string
-  kind?: 'context_compaction'
-  trigger?: 'auto' | 'manual'
-  compactionStatus?: 'completed' | 'failed'
-  compactedItems?: number
-  keptItems?: number
-  estimatedTokensBefore?: number
-  estimatedTokensAfter?: number
-  predictedInputTokens?: number
-  inputBudgetTokens?: number
-  reason?: string
-}
-
-export interface ConversationTimeline {
-  conversation: Conversation
-  messages: TimelineMessage[]
-}

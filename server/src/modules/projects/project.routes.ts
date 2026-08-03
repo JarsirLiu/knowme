@@ -3,13 +3,25 @@ import { randomUUID } from 'node:crypto'
 import type { TurnService } from '../chat/turn.service.js'
 import type { ConversationService } from '../conversations/conversation.service.js'
 import type { ProjectService } from './project.service.js'
+import type { DirectoryService } from './directory.service.js'
 
 export function registerProjectRoutes(
   app: FastifyInstance,
   projectService: ProjectService,
+  directoryService: DirectoryService,
   conversationService: ConversationService,
   turnService: TurnService,
 ) {
+  app.get('/api/directories', async (req, reply) => {
+    const { path: requestedPath } = req.query as { path?: string }
+    try {
+      return reply.send(await directoryService.list(requestedPath))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return reply.status(400).send({ error: `无法读取目录：${message}` })
+    }
+  })
+
   app.get('/api/projects', async (_req, reply) => {
     const projects = await projectService.list()
     return reply.send({ projects })
@@ -31,10 +43,9 @@ export function registerProjectRoutes(
   })
 
   app.post('/api/projects/:projectId/turns', async (req, reply) => {
-    reply.hijack()
     const { projectId } = req.params as { projectId: string }
     const body = req.body as { message?: string; clientMessageId?: string }
-    await turnService.handleTurn(
+    return turnService.handleTurn(
       { projectId },
       body?.message?.trim() ?? '',
       body?.clientMessageId ?? randomUUID(),

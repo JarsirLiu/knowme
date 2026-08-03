@@ -51,7 +51,7 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
         toolDescription:
           'Inspect the current workspace in read-only mode and return a concise project map, relevant files, and implementation risks. Use before making unfamiliar changes.',
         runOptions: {
-          maxTurns: Math.min(cfg.maxTurns, 8),
+          maxTurns: null,
         },
       }),
       reviewerAgent.asTool({
@@ -59,7 +59,7 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
         toolDescription:
           'Perform an independent, read-only quality review of the current project or recent changes. Check correctness, architecture, compatibility debt, persistence, security, tests, operations, and user-facing contracts. Return prioritized findings with concrete evidence and fixes.',
         runOptions: {
-          maxTurns: Math.min(cfg.maxTurns, 12),
+          maxTurns: null,
         },
       }),
     ],

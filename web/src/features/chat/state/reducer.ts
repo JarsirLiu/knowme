@@ -11,9 +11,12 @@ import type {
   ToolCallStatus,
   Turn,
 } from '../types'
+import type { AnyTimelineEvent } from '@superagent/core'
 
 export type ChatAction =
   | { type: 'LOAD_ENTRIES'; entries: ChatEntry[] }
+  | { type: 'TIMELINE_EVENT'; event: AnyTimelineEvent }
+  | { type: 'COMPACTION_REQUEST' }
   | { type: 'TURN_START'; userId: string; userText: string; turnId: string }
   | { type: 'CONTENT_APPEND'; turnId: string; content: MessageContent }
   | { type: 'TOOL_CALL_START'; turnId: string; callId: string; name: string }
@@ -125,10 +128,262 @@ function hasCompaction(entries: ChatEntry[], id: string) {
     entry.type === 'turn' && entry.turn.assistantMessage.parts.some((part) => part.type === 'compaction' && part.compaction.id === id))
 }
 
+function updateTimelineTurn(
+  entries: ChatEntry[],
+  runId: string,
+  update: (turn: Turn) => Turn,
+): ChatEntry[] {
+  return entries.map((entry) => entry.type === 'turn' && entry.turn.id === runId
+    ? { ...entry, turn: update(entry.turn) }
+    : entry)
+}
+
+function updateTimelineCompaction(
+  entries: ChatEntry[],
+  id: string,
+  update: Partial<ContextCompaction>,
+): ChatEntry[] {
+  return entries.map((entry) => {
+    if (entry.type === 'compaction') {
+      return entry.compaction.id === id
+        ? { ...entry, compaction: { ...entry.compaction, ...update } }
+        : entry
+    }
+    return {
+      ...entry,
+      turn: {
+        ...entry.turn,
+        assistantMessage: {
+          ...entry.turn.assistantMessage,
+          parts: entry.turn.assistantMessage.parts.map((part) =>
+            part.type === 'compaction' && part.compaction.id === id
+              ? { ...part, compaction: { ...part.compaction, ...update } }
+              : part),
+        },
+      },
+    }
+  })
+}
+
+export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent): ChatEntry[] {
+  if (event.type === 'turn.started') {
+    if (entries.some((entry) => entry.type === 'turn' && entry.turn.id === event.runId)) return entries
+    return [...entries, {
+      type: 'turn',
+      turn: {
+        id: event.runId ?? event.id,
+        userMessage: {
+          id: event.data.userMessageId,
+          role: 'user',
+          status: 'completed',
+          content: [{ type: 'text', text: event.data.userText }],
+        },
+        assistantMessage: {
+          id: event.data.assistantMessageId,
+          role: 'assistant',
+          status: 'streaming',
+          content: [],
+          toolCalls: [],
+          parts: [],
+        },
+      },
+    }]
+  }
+
+  const runId = event.runId
+  if (event.type === 'context_compaction.started') {
+    const compaction: ContextCompaction = {
+      id: event.data.id,
+      trigger: event.data.trigger,
+      status: 'running',
+    }
+    if (!runId) return [...entries, { type: 'compaction', compaction }]
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: {
+        ...turn.assistantMessage,
+        parts: [...turn.assistantMessage.parts, { type: 'compaction', compaction }],
+      },
+    }))
+  }
+
+  if (
+    event.type === 'context_compaction.completed' ||
+    event.type === 'context_compaction.failed'
+  ) {
+    const update: Partial<ContextCompaction> = event.type === 'context_compaction.completed'
+      ? {
+          status: 'completed',
+          compactedItems: event.data.compactedItems,
+          keptItems: event.data.keptItems,
+          reason: event.data.reason,
+        }
+      : { status: 'failed', error: event.data.error }
+    const updated = updateTimelineCompaction(entries, event.data.id, update)
+    if (hasCompaction(updated, event.data.id)) return updated
+    return [...updated, {
+      type: 'compaction',
+      compaction: {
+        id: event.data.id,
+        trigger: event.data.trigger,
+        status: update.status ?? 'failed',
+        ...update,
+      },
+    }]
+  }
+
+  if (!runId) return entries
+
+  if (event.type === 'message.delta') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: appendContent(turn.assistantMessage, {
+        type: 'text',
+        text: event.data.text,
+      }),
+    }))
+  }
+
+  if (event.type === 'reasoning.delta') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: appendContent(turn.assistantMessage, {
+        type: 'reasoning',
+        text: event.data.text,
+      }),
+    }))
+  }
+
+  if (event.type === 'tool.called') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: {
+        ...turn.assistantMessage,
+        toolCalls: turn.assistantMessage.toolCalls.some((tool) => tool.id === event.data.toolCallId)
+          ? turn.assistantMessage.toolCalls
+          : [
+              ...turn.assistantMessage.toolCalls,
+              { id: event.data.toolCallId, name: event.data.name, args: {}, status: 'running' },
+            ],
+        parts: turn.assistantMessage.parts.some((part) => part.type === 'tool' && part.callId === event.data.toolCallId)
+          ? turn.assistantMessage.parts
+          : [...turn.assistantMessage.parts, { type: 'tool', callId: event.data.toolCallId }],
+      },
+    }))
+  }
+
+  if (event.type === 'tool.arguments') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { args: event.data.args }),
+    }))
+  }
+
+  if (event.type === 'tool.awaiting_approval') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, {
+        args: event.data.args,
+        status: 'awaiting_approval',
+      }),
+    }))
+  }
+
+  if (event.type === 'tool.approved') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { status: 'running' }),
+    }))
+  }
+
+  if (event.type === 'tool.output') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, {
+        status: 'completed',
+        result: event.data.result,
+      }),
+    }))
+  }
+
+  if (event.type === 'tool.denied') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { status: 'denied' }),
+    }))
+  }
+
+  if (event.type === 'tool.failed') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, {
+        status: 'failed',
+        error: event.data.error,
+      }),
+    }))
+  }
+
+  if (event.type === 'run.waiting_approval') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: { ...turn.assistantMessage, status: 'waiting_approval' },
+    }))
+  }
+
+  if (event.type === 'run.started' || event.type === 'run.resumed') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: { ...turn.assistantMessage, status: 'streaming' },
+    }))
+  }
+
+  if (event.type === 'run.completed') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: { ...turn.assistantMessage, status: 'completed' },
+    }))
+  }
+
+  if (event.type === 'run.failed' || event.type === 'run.cancelled' || event.type === 'run.interrupted') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: {
+        ...turn.assistantMessage,
+        status: 'incomplete',
+        error: event.data.error,
+      },
+    }))
+  }
+
+  return entries
+}
+
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'LOAD_ENTRIES':
       return { ...state, entries: action.entries, isLoading: false, isCompacting: false, error: null }
+
+    case 'TIMELINE_EVENT': {
+      const event = action.event
+      return {
+        ...state,
+        entries: applyTimelineEvent(state.entries, event),
+        isLoading: event.type === 'turn.started' || event.type === 'run.started' ||
+          event.type === 'run.resumed' || event.type === 'run.waiting_approval'
+          ? true
+          : event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled'
+            ? false
+            : state.isLoading,
+        isCompacting: event.type === 'context_compaction.started'
+          ? true
+          : event.type === 'context_compaction.completed' || event.type === 'context_compaction.failed'
+            ? false
+            : state.isCompacting,
+      }
+    }
+
+    case 'COMPACTION_REQUEST':
+      return { ...state, isCompacting: true, error: null }
 
     case 'TURN_START': {
       const turn: Turn = {

@@ -54,7 +54,10 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
       )}
 
       {message.status === 'incomplete' && (
-        <div className={styles.incompleteBadge}>生成中断</div>
+        <div className={styles.incompleteBadge}>
+          <span>生成中断</span>
+          {message.error && <span>{message.error}</span>}
+        </div>
       )}
     </div>
   )

@@ -24,8 +24,7 @@ type ProjectPopoverPosition = {
 }
 
 function activeConversationId(active: ActiveConversation | null): string | undefined {
-  if (!active) return undefined
-  return active.kind === 'persisted' ? active.conversationId : active.conversationId
+  return active?.kind === 'persisted' ? active.conversationId : undefined
 }
 
 export function Sidebar({

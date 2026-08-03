@@ -1,15 +1,20 @@
 import { tool } from '@openai/agents'
+import { lookup } from 'node:dns/promises'
+import { isIP } from 'node:net'
 import { Readability } from '@mozilla/readability'
 import sniffHTMLEncoding from 'html-encoding-sniffer'
 import iconv from 'iconv-lite'
 import { JSDOM } from 'jsdom'
 import { z } from 'zod'
 
+type ToolCallDetails = { signal?: AbortSignal }
+
 const DEFAULT_MAX_BYTES = 1024 * 1024
 const MAX_MAX_BYTES = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 20_000
 const MAX_TIMEOUT_MS = 60_000
 const MAX_TEXT_CHARS = 60_000
+const MAX_REDIRECTS = 5
 
 const REQUEST_HEADERS = {
   accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/json;q=0.8,*/*;q=0.6',
@@ -65,6 +70,27 @@ function isPrivateHost(hostname: string): boolean {
     || /^fe80:/i.test(host)
 }
 
+function isPrivateIp(address: string): boolean {
+  if (isIP(address) === 4) {
+    const octets = address.split('.').map(Number)
+    return octets[0] === 0
+      || octets[0] === 10
+      || octets[0] === 127
+      || octets[0] === 169 && octets[1] === 254
+      || octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31
+      || octets[0] === 192 && octets[1] === 168
+  }
+  const normalized = address.toLowerCase()
+  return normalized === '::1'
+    || normalized === '::'
+    || normalized.startsWith('fc')
+    || normalized.startsWith('fd')
+    || normalized.startsWith('fe8')
+    || normalized.startsWith('fe9')
+    || normalized.startsWith('fea')
+    || normalized.startsWith('feb')
+}
+
 function parseUrl(input: string): URL | WebFetchError {
   try {
     const parsed = new URL(input)
@@ -77,6 +103,23 @@ function parseUrl(input: string): URL | WebFetchError {
     return parsed
   } catch {
     return { ok: false, url: input, error: 'Invalid URL.' }
+  }
+}
+
+async function validatePublicUrl(url: URL, original: string): Promise<URL | WebFetchError> {
+  if (isPrivateHost(url.hostname)) return { ok: false, url: original, error: 'Private, localhost, and link-local URLs are blocked.' }
+  if (isIP(url.hostname)) {
+    if (isPrivateIp(url.hostname)) return { ok: false, url: original, error: 'Private, localhost, and link-local URLs are blocked.' }
+    return url
+  }
+  try {
+    const records = await lookup(url.hostname, { all: true, verbatim: true })
+    if (records.length === 0 || records.some((record) => isPrivateIp(record.address))) {
+      return { ok: false, url: original, error: 'The target resolves to a private or link-local address.' }
+    }
+    return url
+  } catch {
+    return { ok: false, url: original, error: 'Unable to resolve target host.' }
   }
 }
 
@@ -174,22 +217,43 @@ export const webFetch = () =>
       timeout_ms: z.union([z.number(), z.string()]).nullable().optional()
         .describe('Request timeout in milliseconds, default 20000, capped at 60000'),
     }),
-    execute: async ({ url, max_bytes, timeout_ms }) => {
+    execute: async ({ url, max_bytes, timeout_ms }, _context, details?: ToolCallDetails) => {
       const parsed = parseUrl(url)
       if (!(parsed instanceof URL)) return asToolResult(parsed)
+
+      const validated = await validatePublicUrl(parsed, url)
+      if (!(validated instanceof URL)) return asToolResult(validated)
 
       const maxBytes = clampInteger(max_bytes, DEFAULT_MAX_BYTES, 1_000, MAX_MAX_BYTES)
       const timeoutMs = clampInteger(timeout_ms, DEFAULT_TIMEOUT_MS, 1_000, MAX_TIMEOUT_MS)
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), timeoutMs)
+      const abortFromRun = () => controller.abort()
+      details?.signal?.addEventListener('abort', abortFromRun, { once: true })
 
       try {
-        const response = await fetch(parsed, {
-          signal: controller.signal,
-          headers: REQUEST_HEADERS,
-          redirect: 'follow',
-        })
+        let currentUrl = parsed
+        let response: Response | undefined
+        for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+          response = await fetch(currentUrl, {
+            signal: controller.signal,
+            headers: REQUEST_HEADERS,
+            redirect: 'manual',
+          })
+          if (![301, 302, 303, 307, 308].includes(response.status)) break
+          const location = response.headers.get('location')
+          if (!location) break
+          if (redirect === MAX_REDIRECTS) {
+            return asToolResult({ ok: false, url: parsed.toString(), finalUrl: currentUrl.toString(), status: response.status, error: 'Too many redirects.' })
+          }
+          const next = parseUrl(new URL(location, currentUrl).toString())
+          if (!(next instanceof URL)) return asToolResult(next)
+          const nextValidated = await validatePublicUrl(next, parsed.toString())
+          if (!(nextValidated instanceof URL)) return asToolResult(nextValidated)
+          currentUrl = nextValidated
+        }
+        if (!response) throw new Error('No response received')
         const contentType = response.headers.get('content-type') ?? ''
         const contentLength = Number(response.headers.get('content-length') ?? 0)
 
@@ -266,6 +330,7 @@ export const webFetch = () =>
         })
       } finally {
         clearTimeout(timeout)
+        details?.signal?.removeEventListener('abort', abortFromRun)
       }
     },
   })

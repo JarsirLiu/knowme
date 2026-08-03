@@ -5,6 +5,7 @@ import { Header, MessageList, InputBar, useAgentChat } from '@/features/chat'
 import type { ActiveConversation } from '@/features/chat/hooks/useAgentChat'
 import { client } from '@/api/client'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
+import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
 import styles from './HomeClient.module.css'
 
 function createDraft(projectId: string): ActiveConversation {
@@ -12,7 +13,6 @@ function createDraft(projectId: string): ActiveConversation {
     kind: 'draft',
     draftId: crypto.randomUUID(),
     projectId,
-    title: '新任务',
   }
 }
 
@@ -26,12 +26,18 @@ export default function HomeClient() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [projectModalOpen, setProjectModalOpen] = useState(false)
   const [creatingProject, setCreatingProject] = useState(false)
+  const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
+  const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null)
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
 
   const handleConversationCreated = useCallback((data: { conversationId: string; title: string }) => {
     setActive((current) => {
       if (!current || current.kind !== 'draft') return current
-      return { ...current, conversationId: data.conversationId, title: data.title }
+      return {
+        kind: 'persisted',
+        conversationId: data.conversationId,
+        projectId: current.projectId,
+      }
     })
     setConversationsByProject((current) => {
       if (!activeProjectId) return current
@@ -99,6 +105,7 @@ export default function HomeClient() {
 
   const handleNewProject = useCallback(() => {
     if (isLoading) return
+    setSelectedDirectory(null)
     setProjectModalOpen(true)
   }, [isLoading])
 
@@ -112,12 +119,31 @@ export default function HomeClient() {
       setActive(createDraft(project.id))
       setMobileNavOpen(false)
       setProjectModalOpen(false)
+      return true
     } catch (error) {
       window.alert(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setCreatingProject(false)
     }
   }, [])
+
+  const handleSelectProjectDirectory = useCallback(() => {
+    setDirectoryPickerOpen(true)
+  }, [])
+
+  const handleDirectorySelected = useCallback(async (directory: string) => {
+    const normalizedPath = directory.replace(/[\\/]+$/, '')
+    const lastPart = normalizedPath.split(/[\\/]/).pop() || normalizedPath
+    const name = /^[A-Za-z]:$/.test(lastPart) ? `${lastPart[0].toUpperCase()} 盘` : lastPart
+
+    setSelectedDirectory(directory)
+    setDirectoryPickerOpen(false)
+    setProjectModalOpen(false)
+
+    const created = await handleCreateProject({ name, rootPath: directory })
+    if (!created) setProjectModalOpen(true)
+  }, [handleCreateProject])
 
   const handleSelectProject = useCallback((projectId: string) => {
     if (isLoading) return
@@ -154,7 +180,7 @@ export default function HomeClient() {
         [projectId]: (current[projectId] ?? []).filter((conversation) => conversation.id !== conversationId),
       }))
 
-      const activeConversationId = active?.kind === 'persisted' ? active.conversationId : active?.conversationId
+      const activeConversationId = active?.kind === 'persisted' ? active.conversationId : undefined
       const deletingActive = activeConversationId === conversationId
       if (deletingActive) {
         const nextConversation = nextConversations[0]
@@ -173,14 +199,18 @@ export default function HomeClient() {
 
   const handleSend = useCallback(() => {
     if (!input.trim() || isLoading) return
+    if (!active) {
+      setProjectModalOpen(true)
+      return
+    }
     const message = input
     setInput('')
     void sendMessage(message)
-  }, [input, isLoading, sendMessage])
+  }, [active, input, isLoading, sendMessage])
 
   const activeTitle = active?.kind === 'persisted'
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
-    : active?.title ?? '新任务'
+    : '新任务'
 
   if (!initialized) {
     return <div className={styles.loadingScreen}>正在加载本地工作区…</div>
@@ -229,8 +259,15 @@ export default function HomeClient() {
       <ProjectModal
         open={projectModalOpen}
         isSubmitting={creatingProject}
+        selectedDirectory={selectedDirectory}
         onClose={() => setProjectModalOpen(false)}
+        onSelectDirectory={handleSelectProjectDirectory}
         onSubmit={handleCreateProject}
+      />
+      <DirectoryPickerModal
+        open={directoryPickerOpen}
+        onClose={() => setDirectoryPickerOpen(false)}
+        onSelect={handleDirectorySelected}
       />
     </div>
   )

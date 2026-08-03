@@ -1,18 +1,6 @@
 export type * from './types/index.js'
 export type {
   SSEEvent,
-  TextDeltaEvent,
-  ToolCallStartEvent,
-  ToolCallDeltaEvent,
-  ToolCallAwaitingApprovalEvent,
-  ToolCallCompletedEvent,
-  ToolCallDeniedEvent,
-  ToolCallFailedEvent,
-  ErrorEvent,
-  StatusEvent,
-  ConversationCreatedEvent,
-  SessionCreatedEvent,
-  SessionUpdatedEvent,
 } from './events.js'
 export type {
   CreateProjectRequest,
@@ -29,4 +17,5 @@ export type {
   ConversationTimelineResponse,
   DeviceResponse,
   DeviceListResponse,
+  DirectoryListingResponse,
 } from './responses.js'

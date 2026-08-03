@@ -93,23 +93,39 @@ export class PrismaAgentSession implements Session {
         recentTokenBudget: 0,
       }
     }
-    return compactSession(this.sessionId, this.compaction, trigger)
+    const id = randomUUID()
+    let started = false
+    try {
+      const result = await compactSession(this.sessionId, this.compaction, trigger, {
+        beforeCompaction: async () => {
+          started = true
+          await this.observer?.started?.({ id, trigger })
+        },
+      })
+      if (result.status === 'compacted') await this.observer?.completed?.({ id, trigger, result })
+      return result
+    } catch (error) {
+      if (started) {
+        await this.observer?.failed?.({
+          id,
+          trigger,
+          error: error instanceof Error ? error.message : String(error),
+        }).catch(() => undefined)
+      }
+      throw error
+    }
   }
 
   async runCompaction(): Promise<null> {
     if (!this.compaction) return null
 
-    const id = randomUUID()
     try {
-      await this.observer?.started?.({ id, trigger: 'auto' })
-      const result = await compactSession(this.sessionId, this.compaction, 'auto')
+      const result = await this.compact('auto')
       if (result.status === 'compacted') {
         await persistCompactionMessage(this.sessionId, result)
       }
-      await this.observer?.completed?.({ id, trigger: 'auto', result })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await this.observer?.failed?.({ id, trigger: 'auto', error: message }).catch(() => undefined)
       console.warn('[context-compaction] skipped:', message)
     }
 

@@ -2,7 +2,7 @@ import type { FastifyReply } from 'fastify'
 import type { SSEEvent } from '@superagent/core'
 
 export function sendSSE(reply: FastifyReply, event: SSEEvent): void {
-  reply.raw.write(`data: ${JSON.stringify(event)}\n\n`)
+  reply.raw.write(`id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`)
 }
 
 export function setupSSEHeaders(reply: FastifyReply): void {

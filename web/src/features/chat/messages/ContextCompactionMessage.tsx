@@ -9,6 +9,8 @@ function label(compaction: ContextCompaction) {
 }
 
 export function ContextCompactionMessage({ compaction }: { compaction: ContextCompaction }) {
+  if (compaction.status === 'completed' && compaction.reason) return null
+
   return (
     <div className={`${styles.message} ${styles[compaction.status]}`} role="status">
       <span className={styles.icon} aria-hidden="true">

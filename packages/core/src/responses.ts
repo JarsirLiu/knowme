@@ -1,4 +1,4 @@
-import type { Project, Conversation, ConversationTimeline } from './types/index.js'
+import type { Project, Conversation, ConversationTimeline, DirectoryListing } from './types/index.js'
 import type { Device } from './types/device.js'
 
 export interface ProjectResponse {
@@ -27,3 +27,5 @@ export interface DeviceResponse {
 export interface DeviceListResponse {
   devices: Device[]
 }
+
+export interface DirectoryListingResponse extends DirectoryListing {}

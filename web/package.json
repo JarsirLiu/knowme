@@ -12,6 +12,7 @@
     "@superagent/client": "workspace:*",
     "@superagent/core": "workspace:*",
     "ai": "^4.0.0",
+    "lucide-react": "^1.28.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^9.0.3",

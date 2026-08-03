@@ -55,6 +55,7 @@ export interface AssistantMessage {
   id: string
   role: 'assistant'
   status: AssistantMessageStatus
+  error?: string
   content: MessageContent[]
   toolCalls: ToolCall[]
   parts: AssistantPart[]

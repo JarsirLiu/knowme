@@ -43,6 +43,10 @@ export interface CompactionObserver {
   failed?: (input: { id: string; trigger: SessionCompactionTrigger; error: string }) => Promise<void>
 }
 
+interface CompactionHooks {
+  beforeCompaction?: () => Promise<void>
+}
+
 export class OpenAICompatibleContextSummarizer implements ContextSummarizer {
   constructor(
     private readonly cfg: {
@@ -120,6 +124,7 @@ export async function compactSession(
   sessionId: string,
   options: SessionCompactionOptions,
   trigger: SessionCompactionTrigger,
+  hooks?: CompactionHooks,
 ): Promise<SessionCompactionResult> {
   const items = await readSessionItems(sessionId)
   const force = trigger === 'manual'
@@ -147,8 +152,11 @@ export async function compactSession(
     return skipped(trigger, 'no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
   }
 
+  await hooks?.beforeCompaction?.()
+
+  const summaryItems = compactedItems.filter((item) => !isReasoningItem(item))
   const summary = await options.summarizer.summarize({
-    items: compactedItems,
+    items: summaryItems,
     maxPromptChars: options.maxPromptChars,
   })
   const summaryItem = createSummaryItem(summary, {
@@ -244,17 +252,24 @@ async function readUsageBaseline(
   })
   if (!session) return undefined
 
-  const event = await prisma.runEvent.findFirst({
+  const event = await prisma.timelineEvent.findFirst({
+    where: {
+      type: 'run.usage',
+      conversationId: session.conversationId,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  const legacyEvent = event ?? await prisma.runEvent.findFirst({
     where: {
       type: 'run.usage',
       run: { conversationId: session.conversationId },
     },
     orderBy: { createdAt: 'desc' },
   })
-  if (!event) return undefined
+  if (!legacyEvent) return undefined
 
   try {
-    const payload = JSON.parse(event.payload) as Record<string, unknown>
+    const payload = JSON.parse(legacyEvent.payload) as Record<string, unknown>
     const inputTokens = Number(payload.inputTokens)
     const estimatedTokens = Number(payload.estimatedTokens)
     if (!Number.isFinite(inputTokens) || !Number.isFinite(estimatedTokens)) return undefined
@@ -332,7 +347,10 @@ function createSummaryItem(
 }
 
 function buildCompactionPrompt(items: AgentInputItem[], maxPromptChars: number): string {
-  const lines = items.map((item, index) => String(index + 1) + '. ' + formatItemForSummary(item))
+  const lines = items
+    .map((item) => formatItemForSummary(item))
+    .filter((line): line is string => Boolean(line))
+    .map((line, index) => String(index + 1) + '. ' + line)
   const body = truncateMiddle(lines.join('\n'), maxPromptChars)
   return [
     'Compact the following earlier session items into a durable summary for a coding agent.',
@@ -344,8 +362,11 @@ function buildCompactionPrompt(items: AgentInputItem[], maxPromptChars: number):
 
 function formatItemForSummary(item: AgentInputItem): string {
   const record = item as Record<string, unknown>
+  if (isReasoningItem(item)) return ''
+
   if (record.type === 'message') {
-    return String(record.role ?? 'unknown') + ': ' + extractMessageText(record.content)
+    const text = extractMessageText(record.content)
+    return text ? String(record.role ?? 'unknown') + ': ' + text : ''
   }
   if (record.type === 'function_call') {
     return 'tool_call ' + String(record.name ?? 'unknown') + ': ' + truncateMiddle(String(record.arguments ?? ''), 1200)
@@ -356,12 +377,18 @@ function formatItemForSummary(item: AgentInputItem): string {
   return truncateMiddle(JSON.stringify(item), 1200)
 }
 
+function isReasoningItem(item: AgentInputItem): boolean {
+  const record = item as Record<string, unknown>
+  return record.type === 'reasoning' || record.type === 'reasoning_item'
+}
+
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return truncateMiddle(content, 1200)
   if (!Array.isArray(content)) return truncateMiddle(JSON.stringify(content), 1200)
   return truncateMiddle(content.map((part) => {
     if (!part || typeof part !== 'object') return String(part)
     const record = part as Record<string, unknown>
+    if (record.type === 'reasoning' || record.type === 'reasoning_text') return ''
     return String(record.text ?? record.content ?? JSON.stringify(record))
   }).join('\n'), 1200)
 }

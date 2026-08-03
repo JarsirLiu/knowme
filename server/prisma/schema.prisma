@@ -25,10 +25,13 @@ model Conversation {
   agentProfile String        @default("coding")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  nextRunSequence Int        @default(0)
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agentSession AgentSession?
   messages     Message[]
   runs         AgentRun[]
+  timelineSequence TimelineSequence?
+  timelineEvents TimelineEvent[]
 
   @@index([projectId, updatedAt])
 }
@@ -73,11 +76,17 @@ model AgentRun {
   id              String        @id @default(cuid())
   conversationId  String
   clientMessageId String?
+  sequence        Int           @default(0)
   status          String        @default("queued")
   input           String
   output          String?
   state           String?
   error           String?
+  attempt         Int           @default(0)
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
+  cancelRequestedAt DateTime?
+  lastHeartbeatAt DateTime?
   startedAt       DateTime?
   finishedAt      DateTime?
   createdAt       DateTime      @default(now())
@@ -86,9 +95,12 @@ model AgentRun {
   events          RunEvent[]
   approvals       Approval[]
   artifacts       Artifact[]
+  timelineEvents  TimelineEvent[]
 
   @@index([conversationId, createdAt])
   @@index([conversationId, clientMessageId])
+  @@index([status, createdAt])
+  @@index([leaseExpiresAt])
   @@unique([clientMessageId])
 }
 
@@ -102,6 +114,28 @@ model RunEvent {
   run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@unique([runId, sequence])
+  @@index([runId, sequence])
+}
+
+model TimelineSequence {
+  conversationId String       @id
+  nextSequence   Int          @default(0)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model TimelineEvent {
+  id             String       @id @default(cuid())
+  conversationId String
+  runId          String?
+  sequence       Int
+  type           String
+  payload        String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  run            AgentRun?    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, sequence])
+  @@index([conversationId, sequence])
   @@index([runId, sequence])
 }
 

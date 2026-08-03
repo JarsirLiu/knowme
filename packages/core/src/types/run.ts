@@ -1,12 +1,7 @@
 export interface StartTurnResult {
   conversation: import('./project.js').Conversation
+  conversationId: string
+  title: string
   runId: string
-}
-
-export interface RunEventEnvelope {
-  runId: string
-  sequence: number
-  type: string
-  payload: unknown
-  createdAt: string
+  created: boolean
 }

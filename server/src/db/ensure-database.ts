@@ -22,6 +22,7 @@ const TABLES = [
     "agentProfile" TEXT NOT NULL DEFAULT 'coding',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "nextRunSequence" INTEGER NOT NULL DEFAULT 0,
     CONSTRAINT "Conversation_projectId_fkey"
       FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
@@ -58,11 +59,17 @@ const TABLES = [
     "id" TEXT NOT NULL PRIMARY KEY,
     "conversationId" TEXT NOT NULL,
     "clientMessageId" TEXT,
+    "sequence" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL DEFAULT 'queued',
     "input" TEXT NOT NULL,
     "output" TEXT,
     "state" TEXT,
     "error" TEXT,
+    "attempt" INTEGER NOT NULL DEFAULT 0,
+    "leaseOwner" TEXT,
+    "leaseExpiresAt" DATETIME,
+    "cancelRequestedAt" DATETIME,
+    "lastHeartbeatAt" DATETIME,
     "startedAt" DATETIME,
     "finishedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -73,6 +80,10 @@ const TABLES = [
     ON "AgentRun"("conversationId", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "AgentRun_conversationId_clientMessageId_idx"
     ON "AgentRun"("conversationId", "clientMessageId")`,
+  `CREATE INDEX IF NOT EXISTS "AgentRun_status_createdAt_idx"
+    ON "AgentRun"("status", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "AgentRun_leaseExpiresAt_idx"
+    ON "AgentRun"("leaseExpiresAt")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "AgentRun_clientMessageId_key"
     ON "AgentRun"("clientMessageId")`,
   `CREATE TABLE IF NOT EXISTS "RunEvent" (
@@ -89,6 +100,31 @@ const TABLES = [
     ON "RunEvent"("runId", "sequence")`,
   `CREATE INDEX IF NOT EXISTS "RunEvent_runId_sequence_idx"
     ON "RunEvent"("runId", "sequence")`,
+  `CREATE TABLE IF NOT EXISTS "TimelineSequence" (
+    "conversationId" TEXT NOT NULL PRIMARY KEY,
+    "nextSequence" INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT "TimelineSequence_conversationId_fkey"
+      FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "TimelineEvent" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "conversationId" TEXT NOT NULL,
+    "runId" TEXT,
+    "sequence" INTEGER NOT NULL,
+    "type" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "TimelineEvent_conversationId_fkey"
+      FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "TimelineEvent_runId_fkey"
+      FOREIGN KEY ("runId") REFERENCES "AgentRun"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "TimelineEvent_conversationId_sequence_key"
+    ON "TimelineEvent"("conversationId", "sequence")`,
+  `CREATE INDEX IF NOT EXISTS "TimelineEvent_conversationId_sequence_idx"
+    ON "TimelineEvent"("conversationId", "sequence")`,
+  `CREATE INDEX IF NOT EXISTS "TimelineEvent_runId_sequence_idx"
+    ON "TimelineEvent"("runId", "sequence")`,
   `CREATE TABLE IF NOT EXISTS "Approval" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "runId" TEXT NOT NULL,
@@ -155,4 +191,18 @@ async function initializeDatabase() {
   for (const statement of TABLES) {
     await prisma.$executeRawUnsafe(statement)
   }
+
+  await addColumnIfMissing('AgentRun', 'attempt', 'INTEGER NOT NULL DEFAULT 0')
+  await addColumnIfMissing('AgentRun', 'leaseOwner', 'TEXT')
+  await addColumnIfMissing('AgentRun', 'leaseExpiresAt', 'DATETIME')
+  await addColumnIfMissing('AgentRun', 'cancelRequestedAt', 'DATETIME')
+  await addColumnIfMissing('AgentRun', 'lastHeartbeatAt', 'DATETIME')
+  await addColumnIfMissing('Conversation', 'nextRunSequence', 'INTEGER NOT NULL DEFAULT 0')
+  await addColumnIfMissing('AgentRun', 'sequence', 'INTEGER NOT NULL DEFAULT 0')
+}
+
+async function addColumnIfMissing(table: string, column: string, definition: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("${table}")`)
+  if (rows.some((row) => row.name === column)) return
+  await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${definition}`)
 }

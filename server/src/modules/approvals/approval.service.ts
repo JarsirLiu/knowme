@@ -1,13 +1,6 @@
 import { prisma } from '../../db/client.js'
 
-type PendingApproval = {
-  runId: string
-  resolve: (approved: boolean) => void
-}
-
 export class ApprovalService {
-  private readonly pending = new Map<string, PendingApproval>()
-
   async createApproval(data: {
     runId: string
     toolCallId: string
@@ -33,17 +26,6 @@ export class ApprovalService {
       },
     })
 
-  }
-
-  async waitForApproval(toolCallId: string, runId: string): Promise<boolean> {
-    const existing = await prisma.approval.findUnique({ where: { toolCallId } })
-    if (!existing || existing.runId !== runId) throw new Error(`Approval not found: ${toolCallId}`)
-    if (existing.status === 'approved') return true
-    if (existing.status === 'denied') return false
-
-    return new Promise((resolve) => {
-      this.pending.set(toolCallId, { runId, resolve })
-    })
   }
 
   async approve(conversationId: string, toolCallId: string): Promise<boolean> {
@@ -77,11 +59,14 @@ export class ApprovalService {
       },
     })
 
-    const waiter = this.pending.get(toolCallId)
-    if (waiter) {
-      waiter.resolve(approved)
-      this.pending.delete(toolCallId)
-    }
     return true
+  }
+
+  async getPendingForRun(runId: string) {
+    return prisma.approval.findMany({ where: { runId, status: 'pending' }, orderBy: { createdAt: 'asc' } })
+  }
+
+  async getForRun(runId: string) {
+    return prisma.approval.findMany({ where: { runId }, orderBy: { createdAt: 'asc' } })
   }
 }

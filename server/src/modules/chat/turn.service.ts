@@ -1,23 +1,21 @@
 import type { FastifyReply } from 'fastify'
-import { run, RunState, type Agent, type RunStreamEvent } from '@openai/agents'
-import { createCodingAgent } from '@superagent/agent'
-import { prisma } from '../../db/client.js'
 import { setupSSEHeaders, sendSSE } from '../../utils/sse.js'
-import { ApprovalService } from '../approvals/approval.service.js'
+import type { AnyTimelineEvent } from '@superagent/core'
 import { ConversationService } from '../conversations/conversation.service.js'
-import { RunEventStore } from '../events/run-event-store.js'
-import { PrismaAgentSession } from '../history/agent-session-store.js'
-import { estimateTokens, loadSessionCompactionOptions } from '../history/session-compaction.js'
+import { TimelineEventStore } from '../events/timeline-event-store.js'
+import { RunCoordinator } from '../runs/run-coordinator.js'
+import { extractRawStreamDelta } from './stream-event-mapper.js'
 
-type TurnTarget =
+export type TurnTarget =
   | { projectId: string; conversationId?: undefined }
   | { conversationId: string; projectId?: undefined }
 
+/** HTTP boundary for creating durable runs. It never owns agent execution. */
 export class TurnService {
   constructor(
     private readonly conversationService: ConversationService,
-    private readonly approvalService: ApprovalService,
-    private readonly eventStore: RunEventStore,
+    private readonly coordinator: RunCoordinator,
+    private readonly timelineStore: TimelineEventStore,
   ) {}
 
   async handleTurn(
@@ -26,326 +24,68 @@ export class TurnService {
     clientMessageId: string,
     reply: FastifyReply,
   ) {
+    if (!message.trim()) return reply.status(400).send({ error: 'Message cannot be empty' })
+    const turn = target.projectId
+      ? await this.conversationService.startTurn({ projectId: target.projectId, message, clientMessageId })
+      : await this.conversationService.continueTurn({ conversationId: target.conversationId!, message, clientMessageId })
+
+    if (turn.created) await this.coordinator.enqueue(turn.run.id)
+    return reply.send({
+      conversation: turn.conversation,
+      conversationId: turn.conversation.id,
+      title: turn.conversation.title,
+      runId: turn.run.id,
+      created: turn.created,
+    })
+  }
+
+  async streamConversation(conversationId: string, lastEventId: string | undefined, reply: FastifyReply) {
     setupSSEHeaders(reply)
-    const abortController = new AbortController()
-    const handleClose = () => {
-      if (!reply.raw.writableEnded) abortController.abort()
-    }
-    reply.raw.once('close', handleClose)
-
-    try {
-      if (!message.trim()) throw new Error('Message cannot be empty')
-      const turn = target.projectId
-        ? await this.conversationService.startTurn({
-            projectId: target.projectId,
-            message,
-            clientMessageId,
-          })
-        : await this.conversationService.continueTurn({
-            conversationId: target.conversationId!,
-            message,
-            clientMessageId,
-          })
-
-      const { conversation, run: agentRun, created: isNew } = turn
-      if (target.projectId) {
-        sendSSE(reply, {
-          type: 'conversation_created',
-          data: {
-            conversationId: conversation.id,
-            runId: agentRun.id,
-            title: conversation.title,
-          },
-        })
-      }
-
-      if (!isNew) {
-        await this.replayExistingRun(agentRun, reply)
+    const sequence = await this.sequenceFromEventId(conversationId, lastEventId)
+    let replaying = true
+    let latestSequence = sequence
+    const buffered = new Map<number, AnyTimelineEvent>()
+    const unsubscribe = this.timelineStore.eventHub.subscribe(conversationId, (event) => {
+      if (replaying) {
+        if (event.sequence > latestSequence) buffered.set(event.sequence, event)
         return
       }
-
-      await this.executeRun(conversation.id, agentRun.id, reply, abortController.signal)
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error)
-      if (!abortController.signal.aborted) {
-        sendSSE(reply, { type: 'error', data: { message: messageText } })
-      }
-    } finally {
-      reply.raw.off('close', handleClose)
-      reply.raw.end()
-    }
-  }
-
-  private async replayExistingRun(agentRun: {
-    status: string
-    output: string | null
-    error: string | null
-  }, reply: FastifyReply) {
-    if (agentRun.status === 'completed') {
-      if (agentRun.output) sendSSE(reply, { type: 'text_delta', data: { text: agentRun.output } })
-      sendSSE(reply, { type: 'status', data: { status: 'idle' } })
-      return
-    }
-
-    if (agentRun.status === 'failed') {
-      sendSSE(reply, { type: 'error', data: { message: agentRun.error ?? 'Agent run failed' } })
-      return
-    }
-
-    sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
-    sendSSE(reply, {
-      type: 'error',
-      data: { message: `This request is already ${agentRun.status}; wait for the active run to finish.` },
+      if (event.sequence <= latestSequence || reply.raw.writableEnded) return
+      latestSequence = event.sequence
+      sendSSE(reply, event)
     })
-  }
-
-  private async executeRun(
-    conversationId: string,
-    runId: string,
-    reply: FastifyReply,
-    signal: AbortSignal,
-  ) {
-    const conversation = await this.conversationService.get(conversationId)
-    const project = await prisma.project.findUnique({ where: { id: conversation.projectId } })
-    if (!project) throw new Error(`Project not found: ${conversation.projectId}`)
-
-    const { agent, cfg } = createCodingAgent({ workspace: project.rootPath })
-    const sessionId = await this.conversationService.getSessionId(conversationId)
-    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), {
-      started: async ({ id, trigger }) => {
-        await this.eventStore.append(runId, 'context.compaction.started', { id, trigger })
-        sendSSE(reply, {
-          type: 'context_compaction',
-          data: { id, trigger, status: 'started' },
-        })
-      },
-      completed: async ({ id, trigger, result }) => {
-        await this.eventStore.append(runId, 'context.compaction.completed', {
-          id,
-          trigger,
-          compactedItems: result.compactedItems,
-          keptItems: result.keptItems,
-        })
-        sendSSE(reply, {
-          type: 'context_compaction',
-          data: {
-            id,
-            trigger,
-            status: 'completed',
-            compactedItems: result.compactedItems,
-            keptItems: result.keptItems,
-            reason: result.reason,
-          },
-        })
-      },
-      failed: async ({ id, trigger, error }) => {
-        await this.eventStore.append(runId, 'context.compaction.failed', { id, trigger, error })
-        sendSSE(reply, {
-          type: 'context_compaction',
-          data: { id, trigger, status: 'failed', error },
-        })
-      },
-    })
-
-    await prisma.agentRun.update({
-      where: { id: runId },
-      data: { status: 'running', startedAt: new Date() },
-    })
-    await this.eventStore.append(runId, 'run.started', { conversationId })
-    sendSSE(reply, { type: 'status', data: { status: 'thinking' } })
-
+    const heartbeat = setInterval(() => {
+      if (!reply.raw.writableEnded) reply.raw.write(': heartbeat\n\n')
+    }, 15_000)
     try {
-      const stream = await run(agent, await this.getRunInput(agent, runId), {
-        maxTurns: cfg.maxTurns,
-        stream: true,
-        session,
-        signal,
-      })
-
-      const completedStream = await this.drainStream(agent, stream, runId, reply, session, cfg.maxTurns, signal)
-      const usage = getLatestModelUsage(completedStream.state)
-      if (usage) {
-        await this.eventStore.append(runId, 'run.usage', {
-          ...usage,
-          estimatedTokens: estimateTokens(await session.getItems()),
-          source: 'provider',
-        })
+      const events = await this.timelineStore.listAfter(conversationId, sequence)
+      for (const event of events) {
+        if (event.sequence <= latestSequence || reply.raw.writableEnded) continue
+        latestSequence = event.sequence
+        sendSSE(reply, event)
       }
-      const finalOutput = typeof completedStream.finalOutput === 'string'
-        ? completedStream.finalOutput
-        : completedStream.finalOutput == null
-          ? ''
-          : JSON.stringify(completedStream.finalOutput)
-
-      if (finalOutput) {
-        await prisma.message.create({
-          data: {
-            conversationId,
-            runId,
-            role: 'assistant',
-            content: finalOutput,
-          },
-        })
+      replaying = false
+      for (const event of [...buffered.values()].sort((a, b) => a.sequence - b.sequence)) {
+        if (event.sequence <= latestSequence || reply.raw.writableEnded) continue
+        latestSequence = event.sequence
+        sendSSE(reply, event)
       }
-
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
+      await new Promise<void>((resolve) => {
+        const close = () => resolve()
+        reply.raw.once('close', close)
       })
-
-      await prisma.agentRun.update({
-        where: { id: runId },
-        data: {
-          status: 'completed',
-          output: finalOutput || null,
-          state: null,
-          finishedAt: new Date(),
-        },
-      })
-      await this.eventStore.append(runId, 'run.completed', { output: finalOutput })
-      sendSSE(reply, { type: 'status', data: { status: 'idle' } })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await prisma.agentRun.update({
-        where: { id: runId },
-        data: {
-          status: signal.aborted ? 'cancelled' : 'failed',
-          error: signal.aborted ? 'Run cancelled by client' : message,
-          finishedAt: new Date(),
-        },
-      })
-      await this.eventStore.append(runId, signal.aborted ? 'run.cancelled' : 'run.failed', {
-        error: signal.aborted ? 'Run cancelled by client' : message,
-      })
-      if (!signal.aborted) sendSSE(reply, { type: 'error', data: { message } })
+    } finally {
+      unsubscribe()
+      clearInterval(heartbeat)
+      if (!reply.raw.writableEnded) reply.raw.end()
     }
   }
 
-  private async getRunInput(agent: Agent, runId: string): Promise<any> {
-    const agentRun = await prisma.agentRun.findUnique({ where: { id: runId } })
-    if (!agentRun) throw new Error(`Run not found: ${runId}`)
-    if (agentRun.state) return RunState.fromString(agent, agentRun.state)
-    return agentRun.input
-  }
-
-  private async drainStream(
-    agent: Agent,
-    stream: any,
-    runId: string,
-    reply: FastifyReply,
-    session: PrismaAgentSession,
-    maxTurns: number,
-    signal: AbortSignal,
-  ): Promise<any> {
-    for await (const event of stream as AsyncIterable<RunStreamEvent>) {
-      await this.handleStreamEvent(runId, event, reply)
-    }
-
-    await stream.completed
-    const interruptions = stream.interruptions ?? []
-    if (interruptions.length === 0) return stream
-
-    await prisma.agentRun.update({
-      where: { id: runId },
-      data: { status: 'waiting_approval', state: stream.state.toString() },
-    })
-
-    for (const interruption of interruptions) {
-      const rawItem = (interruption as { rawItem?: unknown }).rawItem as Record<string, unknown> | undefined
-      const callId = String(rawItem?.callId ?? rawItem?.id ?? 'unknown')
-      const name = String(rawItem?.name ?? 'unknown')
-      const argumentsValue = rawItem?.arguments ?? '{}'
-      let args: unknown = argumentsValue
-      if (typeof argumentsValue === 'string') {
-        try { args = JSON.parse(argumentsValue) } catch { args = argumentsValue }
-      }
-
-      await this.approvalService.createApproval({
-        runId,
-        toolCallId: callId,
-        toolName: name,
-        arguments: args,
-      })
-      await this.eventStore.append(runId, 'approval.requested', { id: callId, name, args })
-      sendSSE(reply, {
-        type: 'tool_call_awaiting_approval',
-        data: { id: callId, name, args },
-      })
-
-      const approval = await this.approvalService.waitForApproval(callId, runId)
-      if (approval) stream.state.approve(interruption)
-      else stream.state.reject(interruption)
-    }
-
-    await prisma.agentRun.update({
-      where: { id: runId },
-      data: { status: 'running', state: stream.state.toString() },
-    })
-
-    const resumed = await run(agent, stream.state, {
-      maxTurns,
-      stream: true,
-      session,
-      signal,
-    })
-    return this.drainStream(agent, resumed, runId, reply, session, maxTurns, signal)
-  }
-
-  private async handleStreamEvent(runId: string, event: RunStreamEvent, reply: FastifyReply) {
-    if (event.type === 'raw_model_stream_event') {
-      const data = (event as { data?: { type?: string; delta?: string } }).data
-      if (data?.type === 'output_text_delta' && data.delta) {
-        await this.eventStore.append(runId, 'message.delta', { text: data.delta })
-        sendSSE(reply, { type: 'text_delta', data: { text: data.delta } })
-      }
-      return
-    }
-
-    if (event.type !== 'run_item_stream_event') return
-    const item = (event as { item?: { type?: string; rawItem?: unknown } }).item
-    if (!item) return
-    const raw = (item.rawItem ?? {}) as Record<string, unknown>
-
-    if (event.name === 'tool_called' && item.type === 'tool_call_item') {
-      const id = String(raw.callId ?? raw.id ?? 'unknown')
-      const name = String(raw.name ?? 'unknown')
-      await this.eventStore.append(runId, 'tool.called', { id, name })
-      sendSSE(reply, { type: 'tool_call_start', data: { id, name } })
-    }
-
-    if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
-      const id = String(raw.callId ?? raw.id ?? 'unknown')
-      const result = raw.output
-      await this.eventStore.append(runId, 'tool.output', { id, result })
-      sendSSE(reply, { type: 'tool_call_completed', data: { id, result } })
-    }
+  private async sequenceFromEventId(conversationId: string, eventId: string | undefined) {
+    if (!eventId) return 0
+    const event = await this.timelineStore.findById(conversationId, eventId)
+    return event?.sequence ?? 0
   }
 }
 
-function getLatestModelUsage(state: unknown): {
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-} | undefined {
-  if (!state || typeof state !== 'object') return undefined
-  const record = state as Record<string, unknown>
-  const responses = Array.isArray(record._modelResponses) ? record._modelResponses : []
-  const lastResponse = responses.at(-1)
-  const responseRecord = lastResponse && typeof lastResponse === 'object'
-    ? lastResponse as Record<string, unknown>
-    : undefined
-  const usageCandidate = responseRecord?.usage ?? record.usage
-  if (!usageCandidate || typeof usageCandidate !== 'object') return undefined
-
-  const usage = usageCandidate as Record<string, unknown>
-  const inputTokens = Number(usage.inputTokens)
-  const outputTokens = Number(usage.outputTokens)
-  const totalTokens = Number(usage.totalTokens)
-  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens)) return undefined
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens: Number.isFinite(totalTokens) ? totalTokens : inputTokens + outputTokens,
-  }
-}
+export { extractRawStreamDelta }

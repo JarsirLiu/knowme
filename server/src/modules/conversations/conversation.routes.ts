@@ -27,13 +27,23 @@ export function registerConversationRoutes(
   })
 
   app.post('/api/conversations/:conversationId/turns', async (req, reply) => {
-    reply.hijack()
     const { conversationId } = req.params as { conversationId: string }
     const body = req.body as { message?: string; clientMessageId?: string }
-    await turnService.handleTurn(
+    return turnService.handleTurn(
       { conversationId },
       body?.message?.trim() ?? '',
       body?.clientMessageId ?? randomUUID(),
+      reply,
+    )
+  })
+
+  app.get('/api/conversations/:conversationId/events', async (req, reply) => {
+    reply.hijack()
+    const { conversationId } = req.params as { conversationId: string }
+    const lastEventId = req.headers['last-event-id']
+    await turnService.streamConversation(
+      conversationId,
+      Array.isArray(lastEventId) ? lastEventId[0] : lastEventId,
       reply,
     )
   })

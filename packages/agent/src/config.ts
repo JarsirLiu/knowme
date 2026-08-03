@@ -4,7 +4,6 @@ export interface AppConfig {
   model: string
   workspace: string
   autoApproveShell: boolean
-  maxTurns: number
 }
 
 function getRequired(...names: string[]): string {
@@ -25,6 +24,5 @@ export function loadConfig(): AppConfig {
     process.env.SUPERAGENT_WORKSPACE || process.env.WORKSPACE || process.cwd()
   const autoApproveShell =
     (process.env.SUPERAGENT_AUTO_APPROVE_SHELL || 'false').toLowerCase() === 'true'
-  const maxTurns = Number(process.env.SUPERAGENT_MAX_TURNS || '25') || 25
-  return { baseURL, apiKey, model, workspace, autoApproveShell, maxTurns }
+  return { baseURL, apiKey, model, workspace, autoApproveShell }
 }

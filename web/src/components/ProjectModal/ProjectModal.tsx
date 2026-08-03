@@ -1,14 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
+import { Folder, FolderPlus, X } from 'lucide-react'
 import styles from './ProjectModal.module.css'
 
 type ProjectModalProps = {
   open: boolean
   isSubmitting?: boolean
+  selectedDirectory?: string | null
   onClose: () => void
+  onSelectDirectory: () => void
   onSubmit: (data: { name: string; rootPath: string }) => void
 }
 
-export function ProjectModal({ open, isSubmitting = false, onClose, onSubmit }: ProjectModalProps) {
+export function ProjectModal({
+  open,
+  isSubmitting = false,
+  selectedDirectory = null,
+  onClose,
+  onSelectDirectory,
+  onSubmit,
+}: ProjectModalProps) {
   const [name, setName] = useState('')
   const [rootPath, setRootPath] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
@@ -20,6 +30,10 @@ export function ProjectModal({ open, isSubmitting = false, onClose, onSubmit }: 
     const timer = window.setTimeout(() => nameRef.current?.focus(), 0)
     return () => window.clearTimeout(timer)
   }, [open])
+
+  useEffect(() => {
+    if (selectedDirectory) setRootPath(selectedDirectory)
+  }, [selectedDirectory])
 
   useEffect(() => {
     if (!open) return
@@ -39,6 +53,11 @@ export function ProjectModal({ open, isSubmitting = false, onClose, onSubmit }: 
     if (canSubmit) onSubmit({ name: name.trim(), rootPath: rootPath.trim() })
   }
 
+  const handleSelectDirectory = () => {
+    if (isSubmitting) return
+    onSelectDirectory()
+  }
+
   return (
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose()
@@ -47,30 +66,31 @@ export function ProjectModal({ open, isSubmitting = false, onClose, onSubmit }: 
         <div className={styles.modalHeader}>
           <h2 id="project-modal-title">创建项目</h2>
           <button className={styles.closeButton} type="button" onClick={onClose} aria-label="关闭">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
+            <X size={18} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
 
         <label className={styles.nameField}>
           <span className={styles.folderIcon} aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
-            </svg>
+            <Folder size={18} strokeWidth={1.8} />
           </span>
           <input ref={nameRef} value={name} onChange={(event) => setName(event.target.value)} placeholder="项目名称" aria-label="项目名称" />
         </label>
 
-        <label className={styles.pathLabel}>
-          <span>源文件夹</span>
-          <span className={styles.pathField}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
-            </svg>
-            <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} placeholder="输入本地文件夹的绝对路径" aria-label="源文件夹路径" />
-          </span>
-        </label>
+        <div className={styles.sourceSection}>
+          <span className={styles.sourceLabel}>Source folders</span>
+          <button
+            className={styles.sourcePicker}
+            type="button"
+            onClick={() => void handleSelectDirectory()}
+            disabled={isSubmitting}
+            title={rootPath || undefined}
+            aria-label="选择源文件夹"
+          >
+            <FolderPlus size={24} strokeWidth={1.8} />
+            <span>{rootPath || '添加 ChatGPT 可读取和编辑的文件夹'}</span>
+          </button>
+        </div>
 
         <div className={styles.actions}>
           <button className={styles.cancelButton} type="button" onClick={onClose}>取消</button>

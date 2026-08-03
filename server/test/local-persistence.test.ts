@@ -8,17 +8,75 @@ import { prisma } from '../src/db/client.js'
 import { ensureDatabase } from '../src/db/ensure-database.js'
 import { ApprovalService } from '../src/modules/approvals/approval.service.js'
 import { ConversationService } from '../src/modules/conversations/conversation.service.js'
-import { RunEventStore } from '../src/modules/events/run-event-store.js'
+import { TimelineEventStore } from '../src/modules/events/timeline-event-store.js'
 import { PrismaAgentSession } from '../src/modules/history/agent-session-store.js'
 import { persistCompactionMessage } from '../src/modules/history/session-compaction.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
+import { extractRawStreamDelta } from '../src/modules/chat/turn.service.js'
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
 let projectId: string
 let primaryConversationId: string
+const timelineStore = new TimelineEventStore()
 
 test.before(async () => {
   await ensureDatabase()
+})
+
+test('normalizes reasoning and message streaming events from Agents SDK providers', () => {
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: { type: 'reasoning-delta', id: 'reasoning-1', delta: '先分析' },
+      },
+    } as any, 'run-1'),
+    {
+      type: 'reasoning.delta',
+      data: { messageId: 'reasoning-1', text: '先分析' },
+    },
+  )
+
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: {
+          type: 'response.reasoning_summary_text.delta',
+          item_id: 'rs_1',
+          delta: '检查实现',
+        },
+      },
+    } as any, 'run-2'),
+    {
+      type: 'reasoning.delta',
+      data: { messageId: 'rs_1', text: '检查实现' },
+    },
+  )
+
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: { type: 'output_text_delta', itemId: 'message-1', delta: '完成' },
+    } as any, 'run-3'),
+    {
+      type: 'message.delta',
+      data: { messageId: 'message-1', text: '完成' },
+    },
+  )
+
+  assert.equal(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: { type: 'output_text_delta', itemId: 'message-1', delta: '完成' },
+      },
+    } as any, 'run-4'),
+    null,
+  )
 })
 
 test.after(async () => {
@@ -34,7 +92,7 @@ test('project and conversation persistence is idempotent', async () => {
   const project = await projects.create({ name: 'Test workspace', rootPath: workspace })
   projectId = project.id
 
-  const conversations = new ConversationService()
+  const conversations = new ConversationService(timelineStore)
   const first = await conversations.startTurn({
     projectId: project.id,
     message: 'first task',
@@ -60,7 +118,13 @@ test('project and conversation persistence is idempotent', async () => {
   assert.equal(second.created, true)
 
   const timeline = await conversations.getTimeline(first.conversation.id)
-  assert.deepEqual(timeline.messages.map((message) => message.content), ['first task', 'second task'])
+  assert.deepEqual(
+    timeline.events
+      .filter((event) => event.type === 'turn.started')
+      .map((event) => event.data.userText),
+    ['first task', 'second task'],
+  )
+  assert.deepEqual(timeline.events.map((event) => event.sequence), [1, 2])
 })
 
 test('durable agent session preserves ordering and pop semantics', async () => {
@@ -81,7 +145,7 @@ test('durable agent session preserves ordering and pop semantics', async () => {
 })
 
 test('manual context compaction summarizes old session items and keeps recent items', async () => {
-  const conversations = new ConversationService()
+  const conversations = new ConversationService(timelineStore)
   const turn = await conversations.startTurn({
     projectId,
     message: 'compact this context',
@@ -112,11 +176,12 @@ test('manual context compaction summarizes old session items and keeps recent it
     },
   })
   await session.addItems(items)
-  await new RunEventStore().append(turn.run.id, 'run.usage', {
+  await timelineStore.append(turn.conversation.id, turn.run.id, 'run.usage', {
     inputTokens: 95,
     outputTokens: 10,
     totalTokens: 105,
     estimatedTokens: 10,
+    source: 'test',
   })
 
   const result = await session.compact('manual')
@@ -129,11 +194,18 @@ test('manual context compaction summarizes old session items and keeps recent it
  assert.equal(result.predictedInputTokens, 95 + result.estimatedTokensBefore - 10)
 
   await persistCompactionMessage(sessionRecord.id, result)
+  await timelineStore.append(turn.conversation.id, null, 'context_compaction.completed', {
+    id: 'test-manual-compaction',
+    trigger: 'manual',
+    compactedItems: result.compactedItems,
+    keptItems: result.keptItems,
+    reason: result.reason,
+  })
   const timeline = await conversations.getTimeline(turn.conversation.id)
-  const compactionMessage = timeline.messages.find((message) => message.role === 'system')
-  assert.equal(compactionMessage?.kind, 'context_compaction')
-  assert.equal(compactionMessage?.trigger, 'manual')
-  assert.equal(compactionMessage?.compactedItems, 4)
+  const compactionEvent = timeline.events.find((event) => event.type === 'context_compaction.completed')
+  assert.equal(compactionEvent?.type, 'context_compaction.completed')
+  assert.equal(compactionEvent?.data.trigger, 'manual')
+  assert.equal(compactionEvent?.data.compactedItems, 4)
 
   const compacted = await session.getItems()
   assert.equal(compacted.length, 2)
@@ -142,7 +214,7 @@ test('manual context compaction summarizes old session items and keeps recent it
   assert.deepEqual(compacted.slice(1), items.slice(-1))
 })
 
-test('approval decisions are persisted and can be observed by a waiter', async () => {
+test('approval decisions are persisted durably for coordinator recovery', async () => {
   const run = await prisma.agentRun.findFirstOrThrow({ where: { conversationId: primaryConversationId } })
   const approvals = new ApprovalService()
   const toolCallId = `test-tool-${Date.now()}`
@@ -153,14 +225,13 @@ test('approval decisions are persisted and can be observed by a waiter', async (
     arguments: { command: 'echo test' },
   })
 
-  const waiter = approvals.waitForApproval(toolCallId, run.id)
   assert.equal(await approvals.approve(run.conversationId, toolCallId), true)
-  assert.equal(await waiter, true)
   assert.equal((await prisma.approval.findUnique({ where: { toolCallId } }))?.status, 'approved')
+  assert.equal((await approvals.getPendingForRun(run.id)).length, 0)
 })
 
 test('conversation delete archives it without losing persisted history', async () => {
-  const conversations = new ConversationService()
+  const conversations = new ConversationService(timelineStore)
   const turn = await conversations.startTurn({
     projectId,
     message: 'delete me later',
@@ -177,7 +248,12 @@ test('conversation delete archives it without losing persisted history', async (
   assert.equal(afterDelete.some((conversation) => conversation.id === turn.conversation.id), false)
 
   const timeline = await conversations.getTimeline(turn.conversation.id)
-  assert.deepEqual(timeline.messages.map((message) => message.content), ['delete me later'])
+  assert.deepEqual(
+    timeline.events
+      .filter((event) => event.type === 'turn.started')
+      .map((event) => event.data.userText),
+    ['delete me later'],
+  )
 
   await assert.rejects(
     conversations.continueTurn({
@@ -190,12 +266,25 @@ test('conversation delete archives it without losing persisted history', async (
 })
 
 test('HTTP routes validate project input and return the local project list', async () => {
+  const nestedDirectory = path.join(workspace, 'nested-directory')
+  fs.mkdirSync(nestedDirectory)
   const app = createApp({ port: 0, workspace })
   await app.ready()
 
   const list = await app.inject({ method: 'GET', url: '/api/projects' })
   assert.equal(list.statusCode, 200)
   assert.ok(JSON.parse(list.body).projects.some((project: { id: string }) => project.id === projectId))
+
+  const directories = await app.inject({
+    method: 'GET',
+    url: `/api/directories?path=${encodeURIComponent(workspace)}`,
+  })
+  assert.equal(directories.statusCode, 200)
+  const directoryListing = JSON.parse(directories.body)
+  assert.equal(directoryListing.currentPath, path.resolve(workspace))
+  assert.equal(directoryListing.parentPath, path.dirname(path.resolve(workspace)))
+  assert.ok(directoryListing.rootPaths.includes(path.parse(path.resolve(workspace)).root))
+  assert.deepEqual(directoryListing.entries, [{ name: 'nested-directory', path: nestedDirectory }])
 
   const invalid = await app.inject({
     method: 'POST',
