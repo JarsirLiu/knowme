@@ -5,19 +5,14 @@ import type {
   TimelineEventType,
 } from '@superagent/core'
 import { prisma } from '../../db/client.js'
-import { TimelineEventHub } from './timeline-event-hub.js'
 
 type TimelineTransaction = Prisma.TransactionClient
 
 export class TimelineEventStore {
-  constructor(private readonly hub: TimelineEventHub = new TimelineEventHub()) {}
-
-  get eventHub(): TimelineEventHub {
-    return this.hub
-  }
+  constructor(private readonly publisher: TimelineEventPublisher = noopPublisher) {}
 
   publish(event: AnyTimelineEvent): void {
-    this.hub.publish(event)
+    this.publisher.publish(event)
   }
 
   async append<T extends TimelineEventType>(
@@ -75,6 +70,14 @@ export class TimelineEventStore {
     const row = await prisma.timelineEvent.findFirst({ where: { conversationId, id } })
     return row ? toTimelineEvent(row) : undefined
   }
+}
+
+export interface TimelineEventPublisher {
+  publish(event: AnyTimelineEvent): void
+}
+
+const noopPublisher: TimelineEventPublisher = {
+  publish() {},
 }
 
 export async function appendTimelineEvent<T extends TimelineEventType>(

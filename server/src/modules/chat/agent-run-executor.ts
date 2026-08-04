@@ -1,14 +1,14 @@
 import { run, RunState, type Agent, type RunStreamEvent } from '@openai/agents'
-import { createCodingAgent, type CodingAgent } from '@superagent/agent'
-import { prisma } from '../../db/client.js'
 import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
-import { appendTimelineEvent, TimelineEventStore } from '../events/timeline-event-store.js'
-import { PrismaAgentSession } from '../history/agent-session-store.js'
-import { estimateTokens, loadSessionCompactionOptions } from '../history/session-compaction.js'
+import { TimelineEventStore } from '../events/timeline-event-store.js'
+import type { Session } from '@openai/agents'
+import { estimateTokens } from '../history/session-compaction.js'
 import { persistRunStreamEvent, type StreamEventState } from './stream-event-mapper.js'
+import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
+import { PrismaAgentRunRepository, type AgentRunRepository } from '../runs/agent-run-repository.js'
+import { ProjectService } from '../projects/project.service.js'
 
-type CodingAgentInstance = CodingAgent['agent']
 type PersistedRunState = RunState<unknown, CodingAgentInstance>
 type RunInput = string | PersistedRunState
 type ApprovalInterruption = { rawItem?: unknown }
@@ -24,20 +24,22 @@ export class AgentRunExecutor {
     private readonly conversationService: ConversationService,
     private readonly approvalService: ApprovalService,
     private readonly timelineStore: TimelineEventStore,
+    private readonly runRepository: AgentRunRepository = new PrismaAgentRunRepository(),
+    private readonly projectReader: ProjectReader = new ProjectService(),
+    private readonly runtime: AgentRuntime = new DefaultAgentRuntime(),
   ) {}
 
   async execute(runId: string, signal: AbortSignal, resumed: boolean, leaseOwner: string): Promise<'completed' | 'waiting_approval'> {
-    const agentRun = await prisma.agentRun.findUnique({ where: { id: runId } })
+    const agentRun = await this.runRepository.get(runId)
     if (!agentRun) throw new Error(`Run not found: ${runId}`)
     if (agentRun.status !== 'running' || agentRun.leaseOwner !== leaseOwner) throw new Error(`Run lease lost: ${runId}`)
 
     const conversation = await this.conversationService.get(agentRun.conversationId)
-    const project = await prisma.project.findUnique({ where: { id: conversation.projectId } })
-    if (!project) throw new Error(`Project not found: ${conversation.projectId}`)
+    const project = await this.projectReader.get(conversation.projectId)
 
-    const { agent } = createCodingAgent({ workspace: project.rootPath })
+    const agent = this.runtime.createAgent(project.rootPath)
     const sessionId = await this.conversationService.getSessionId(conversation.id)
-    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), {
+    const session = this.runtime.createSession(sessionId, {
       started: async ({ id, trigger }) => {
         await this.emit(conversation.id, runId, 'context_compaction.started', { id, trigger }, leaseOwner)
       },
@@ -70,48 +72,13 @@ export class AgentRunExecutor {
 
     const interruptions = stream.interruptions
     if (interruptions.length > 0) {
-      const waitingEvents: import('@superagent/core').AnyTimelineEvent[] = []
-      await prisma.$transaction(async (tx) => {
-        const claimed = await tx.agentRun.updateMany({
-          where: { id: runId, status: 'running', leaseOwner },
-          data: {
-            status: 'waiting_approval',
-            state: stream.state.toString(),
-            lastHeartbeatAt: new Date(),
-            leaseOwner: null,
-            leaseExpiresAt: null,
-          },
-        })
-        if (claimed.count !== 1) throw new Error(`Run lease lost: ${runId}`)
-        await tx.conversation.update({ where: { id: conversation.id }, data: { activeRunId: null } })
-        waitingEvents.push(await appendTimelineEvent(tx, conversation.id, runId, 'run.waiting_approval', {}))
-        for (const interruption of interruptions) {
-          const details = approvalDetails(interruption)
-          await tx.approval.upsert({
-            where: { toolCallId: details.toolCallId },
-            create: {
-              runId,
-              toolCallId: details.toolCallId,
-              toolName: details.toolName,
-              arguments: JSON.stringify(details.arguments),
-              status: 'pending',
-            },
-            update: {
-              runId,
-              toolName: details.toolName,
-              arguments: JSON.stringify(details.arguments),
-              status: 'pending',
-              decision: null,
-              resolvedAt: null,
-            },
-          })
-          waitingEvents.push(await appendTimelineEvent(tx, conversation.id, runId, 'tool.awaiting_approval', {
-              toolCallId: details.toolCallId,
-              name: details.toolName,
-              args: details.arguments,
-            }))
-        }
-      })
+      const waitingEvents = await this.runRepository.waitForApprovals(
+        runId,
+        conversation.id,
+        stream.state.toString(),
+        leaseOwner,
+        interruptions.map(approvalDetails),
+      )
       for (const event of waitingEvents) this.timelineStore.publish(event)
       return 'waiting_approval'
     }
@@ -140,11 +107,7 @@ export class AgentRunExecutor {
         await this.emit(conversationId, runId, 'tool.denied', { toolCallId: callId }, leaseOwner)
       }
     }
-    const updated = await prisma.agentRun.updateMany({
-      where: { id: runId, status: 'running', leaseOwner },
-      data: { state: state.toString() },
-    })
-    if (updated.count !== 1) throw new Error(`Run lease lost: ${runId}`)
+    await this.runRepository.updateStateIfOwned(runId, state.toString(), leaseOwner)
     return state
   }
 
@@ -162,11 +125,7 @@ export class AgentRunExecutor {
   ) {
     for await (const event of stream as AsyncIterable<RunStreamEvent>) {
       await persistRunStreamEvent(this.timelineStore, conversationId, runId, event, streamState, leaseOwner)
-      const heartbeat = await prisma.agentRun.updateMany({
-        where: { id: runId, status: 'running', leaseOwner },
-        data: { lastHeartbeatAt: new Date() },
-      })
-      if (heartbeat.count !== 1) throw new Error(`Run lease lost: ${runId}`)
+      await this.runRepository.heartbeatIfOwned(runId, leaseOwner)
     }
     await stream.completed
   }
@@ -176,7 +135,7 @@ export class AgentRunExecutor {
     conversationId: string,
     timelineRunId: string,
     stream: AgentStream,
-    session: PrismaAgentSession,
+    session: Session,
     leaseOwner: string,
   ) {
     const usage = getLatestModelUsage(stream.state)
@@ -188,33 +147,8 @@ export class AgentRunExecutor {
       }, leaseOwner)
     }
     const finalOutput = stringifyOutput(stream.finalOutput)
-    let completedEvent: import('@superagent/core').AnyTimelineEvent
-    await prisma.$transaction(async (tx) => {
-      const ownedRun = await tx.agentRun.updateMany({
-        where: { id: runId, status: 'running', leaseOwner },
-        data: {
-          status: 'completed',
-          output: finalOutput || null,
-          state: null,
-          leaseOwner: null,
-          leaseExpiresAt: null,
-          finishedAt: new Date(),
-          lastHeartbeatAt: new Date(),
-        },
-      })
-      if (ownedRun.count !== 1) throw new Error(`Run lease lost: ${runId}`)
-      if (finalOutput) {
-        await tx.message.upsert({
-          where: { id: runId },
-          create: { id: runId, conversationId, runId, role: 'assistant', content: finalOutput },
-          update: { content: finalOutput },
-        })
-      }
-      await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-      await tx.conversation.update({ where: { id: conversationId }, data: { activeRunId: null } })
-      completedEvent = await appendTimelineEvent(tx, conversationId, timelineRunId, 'run.completed', { output: finalOutput })
-    })
-    this.timelineStore.publish(completedEvent!)
+    const completedEvent = await this.runRepository.complete(runId, conversationId, finalOutput, leaseOwner)
+    this.timelineStore.publish(completedEvent)
   }
 
   private async emit<T extends import('@superagent/core').TimelineEventType>(
@@ -246,6 +180,10 @@ function approvalDetails(interruption: { rawItem?: unknown }) {
     toolName: String(raw.name ?? 'unknown'),
     arguments: args,
   }
+}
+
+interface ProjectReader {
+  get(id: string): Promise<{ rootPath: string }>
 }
 
 function stringifyOutput(value: unknown): string {

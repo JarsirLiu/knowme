@@ -1,31 +1,30 @@
-import fs from 'node:fs'
 import path from 'node:path'
-import { prisma } from '../../db/client.js'
+import {
+  PrismaProjectRepository,
+  type ProjectRepository,
+} from './project-repository.js'
+import { ProjectPathValidator } from './project-path-validator.js'
 
 export class ProjectService {
+  constructor(
+    private readonly repository: ProjectRepository = new PrismaProjectRepository(),
+    private readonly pathValidator: ProjectPathValidator = new ProjectPathValidator(),
+  ) {}
+
   async list() {
-    return prisma.project.findMany({
-      orderBy: { updatedAt: 'desc' },
-    })
+    return this.repository.list()
   }
 
   async create(data: { name: string; rootPath: string }) {
-    const rootPath = path.resolve(data.rootPath)
-    const stat = fs.statSync(rootPath, { throwIfNoEntry: false })
-    if (!stat?.isDirectory()) {
-      throw new Error(`Project root does not exist or is not a directory: ${rootPath}`)
-    }
-
-    return prisma.project.create({
-      data: {
-        name: data.name.trim() || path.basename(rootPath) || 'Local Project',
-        rootPath,
-      },
+    const rootPath = this.pathValidator.resolveDirectory(data.rootPath)
+    return this.repository.create({
+      name: data.name.trim() || path.basename(rootPath) || 'Local Project',
+      rootPath,
     })
   }
 
   async get(id: string) {
-    const project = await prisma.project.findUnique({ where: { id } })
+    const project = await this.repository.get(id)
     if (!project) throw new Error(`Project not found: ${id}`)
     return project
   }

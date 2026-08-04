@@ -1,134 +1,71 @@
 import type { AgentInputItem, Session } from '@openai/agents'
-import { randomUUID } from 'node:crypto'
-import { prisma } from '../../db/client.js'
 import {
-  compactSession,
-  replaceSessionItems,
-  type SessionCompactionOptions,
-  type SessionCompactionResult,
-  type SessionCompactionTrigger,
-  type CompactionObserver,
-  persistCompactionMessage,
+  PrismaAgentSessionRepository,
+  type AgentSessionRepository,
+} from './agent-session-repository.js'
+import {
+  SessionCompactionCoordinator,
+} from './session-compaction-coordinator.js'
+import type {
+  CompactionObserver,
+  SessionCompactionOptions,
+  SessionCompactionResult,
+  SessionCompactionTrigger,
 } from './session-compaction.js'
+import { SessionCompactionService } from './session-compaction.js'
+import {
+  PrismaSessionCompactionRepository,
+  type SessionCompactionRepository,
+} from './session-compaction-repository.js'
 
 export class PrismaAgentSession implements Session {
+  private readonly compactionCoordinator: SessionCompactionCoordinator
+
   constructor(
     private readonly sessionId: string,
-    private readonly compaction?: SessionCompactionOptions,
-    private readonly observer?: CompactionObserver,
-  ) {}
+    compaction?: SessionCompactionOptions,
+    observer?: CompactionObserver,
+    private readonly repository: AgentSessionRepository = new PrismaAgentSessionRepository(),
+    compactionRepository: SessionCompactionRepository = new PrismaSessionCompactionRepository(),
+    coordinator?: SessionCompactionCoordinator,
+  ) {
+    this.compactionCoordinator = coordinator ?? new SessionCompactionCoordinator(
+      sessionId,
+      compaction,
+      observer,
+      new SessionCompactionService(compactionRepository),
+    )
+  }
 
   async getSessionId(): Promise<string> {
     return this.sessionId
   }
 
   async getItems(limit?: number): Promise<AgentInputItem[]> {
-    const items = await prisma.sessionItem.findMany({
-      where: { sessionId: this.sessionId },
-      orderBy: { sequence: limit === undefined ? 'asc' : 'desc' },
-      ...(limit === undefined ? {} : { take: limit }),
-    })
-
-    const ordered = limit === undefined ? items : items.reverse()
-    return ordered.map((item) => JSON.parse(item.payload) as AgentInputItem)
+    return this.repository.getItems(this.sessionId, limit)
   }
 
   async addItems(items: AgentInputItem[]): Promise<void> {
-    if (items.length === 0) return
-
-    await prisma.$transaction(async (tx) => {
-      const last = await tx.sessionItem.findFirst({
-        where: { sessionId: this.sessionId },
-        orderBy: { sequence: 'desc' },
-      })
-      let sequence = last?.sequence ?? 0
-
-      for (const item of items) {
-        sequence += 1
-        await tx.sessionItem.create({
-          data: {
-            sessionId: this.sessionId,
-            sequence,
-            itemType: String(item.type),
-            payload: JSON.stringify(item),
-          },
-        })
-      }
-    })
+    await this.repository.addItems(this.sessionId, items)
   }
 
   async popItem(): Promise<AgentInputItem | undefined> {
-    const item = await prisma.sessionItem.findFirst({
-      where: { sessionId: this.sessionId },
-      orderBy: { sequence: 'desc' },
-    })
-    if (!item) return undefined
-
-    await prisma.sessionItem.delete({ where: { id: item.id } })
-    return JSON.parse(item.payload) as AgentInputItem
+    return this.repository.popItem(this.sessionId)
   }
 
   async clearSession(): Promise<void> {
-    await prisma.sessionItem.deleteMany({ where: { sessionId: this.sessionId } })
+    await this.repository.clearSession(this.sessionId)
   }
 
   async replaceItems(items: AgentInputItem[]): Promise<void> {
-    await replaceSessionItems(this.sessionId, items)
+    await this.repository.replaceItems(this.sessionId, items)
   }
 
   async compact(trigger: SessionCompactionTrigger): Promise<SessionCompactionResult> {
-    if (!this.compaction) {
-      return {
-        status: 'skipped',
-        trigger,
-        reason: 'compaction not configured',
-        beforeItems: 0,
-        afterItems: 0,
-        compactedItems: 0,
-        keptItems: 0,
-        estimatedTokensBefore: 0,
-        estimatedTokensAfter: 0,
-        predictedInputTokens: 0,
-        inputBudgetTokens: 0,
-        recentTokenBudget: 0,
-      }
-    }
-    const id = randomUUID()
-    let started = false
-    try {
-      const result = await compactSession(this.sessionId, this.compaction, trigger, {
-        beforeCompaction: async () => {
-          started = true
-          await this.observer?.started?.({ id, trigger })
-        },
-      })
-      if (result.status === 'compacted') await this.observer?.completed?.({ id, trigger, result })
-      return result
-    } catch (error) {
-      if (started) {
-        await this.observer?.failed?.({
-          id,
-          trigger,
-          error: error instanceof Error ? error.message : String(error),
-        }).catch(() => undefined)
-      }
-      throw error
-    }
+    return this.compactionCoordinator.compact(trigger)
   }
 
   async runCompaction(): Promise<null> {
-    if (!this.compaction) return null
-
-    try {
-      const result = await this.compact('auto')
-      if (result.status === 'compacted') {
-        await persistCompactionMessage(this.sessionId, result)
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn('[context-compaction] skipped:', message)
-    }
-
-    return null
+    return this.compactionCoordinator.runAutoCompaction()
   }
 }

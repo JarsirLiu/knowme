@@ -3,6 +3,7 @@ import { setupSSEHeaders, sendSSE } from '../../utils/sse.js'
 import type { AnyTimelineEvent } from '@superagent/core'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
+import { TimelineEventHub } from '../events/timeline-event-hub.js'
 import { RunCoordinator } from '../runs/run-coordinator.js'
 import { extractRawStreamDelta } from './stream-event-mapper.js'
 
@@ -16,6 +17,7 @@ export class TurnService {
     private readonly conversationService: ConversationService,
     private readonly coordinator: RunCoordinator,
     private readonly timelineStore: TimelineEventStore,
+    private readonly eventHub: TimelineEventHub,
   ) {}
 
   async handleTurn(
@@ -50,7 +52,7 @@ export class TurnService {
       closed = true
     }
     reply.raw.once('close', close)
-    const unsubscribe = this.timelineStore.eventHub.subscribe(conversationId, (event) => {
+    const unsubscribe = this.eventHub.subscribe(conversationId, (event) => {
       if (replaying) {
         if (event.sequence > latestSequence) buffered.set(event.sequence, event)
         return

@@ -129,6 +129,23 @@ test('project and conversation persistence is idempotent', async () => {
   assert.deepEqual(timeline.events.map((event) => event.sequence), [1, 2])
 })
 
+test('transaction-created timeline events use the configured publisher', async () => {
+  const hub = new TimelineEventHub()
+  const store = new TimelineEventStore(hub)
+  const conversations = new ConversationService(store)
+  const received: string[] = []
+  const unsubscribe = hub.subscribe(primaryConversationId, (event) => received.push(event.type))
+
+  await conversations.continueTurn({
+    conversationId: primaryConversationId,
+    message: 'published turn',
+    clientMessageId: 'test-published-message-1',
+  })
+
+  unsubscribe()
+  assert.deepEqual(received, ['turn.started'])
+})
+
 test('durable agent session preserves ordering and pop semantics', async () => {
   const sessionRecord = await prisma.agentSession.findUnique({
     where: { conversationId: primaryConversationId },

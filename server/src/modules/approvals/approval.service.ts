@@ -1,72 +1,30 @@
-import { prisma } from '../../db/client.js'
+import { PrismaApprovalRepository, type ApprovalRepository } from './approval-repository.js'
 
 export class ApprovalService {
-  async createApproval(data: {
+  constructor(private readonly repository: ApprovalRepository = new PrismaApprovalRepository()) {}
+
+  createApproval(data: {
     runId: string
     toolCallId: string
     toolName: string
     arguments: unknown
-  }): Promise<void> {
-    await prisma.approval.upsert({
-      where: { toolCallId: data.toolCallId },
-      create: {
-        runId: data.runId,
-        toolCallId: data.toolCallId,
-        toolName: data.toolName,
-        arguments: JSON.stringify(data.arguments),
-        status: 'pending',
-      },
-      update: {
-        runId: data.runId,
-        toolName: data.toolName,
-        arguments: JSON.stringify(data.arguments),
-        status: 'pending',
-        decision: null,
-        resolvedAt: null,
-      },
-    })
-
+  }) {
+    return this.repository.upsert(data)
   }
 
-  async approve(conversationId: string, toolCallId: string): Promise<boolean> {
-    return this.resolve(conversationId, toolCallId, true)
+  approve(conversationId: string, toolCallId: string) {
+    return this.repository.resolve(conversationId, toolCallId, true)
   }
 
-  async deny(conversationId: string, toolCallId: string): Promise<boolean> {
-    return this.resolve(conversationId, toolCallId, false)
+  deny(conversationId: string, toolCallId: string) {
+    return this.repository.resolve(conversationId, toolCallId, false)
   }
 
-  private async resolve(
-    conversationId: string,
-    toolCallId: string,
-    approved: boolean,
-  ): Promise<boolean> {
-    const approval = await prisma.approval.findFirst({
-      where: {
-        toolCallId,
-        run: { conversationId },
-        status: 'pending',
-      },
-    })
-    if (!approval) return false
-
-    await prisma.approval.update({
-      where: { id: approval.id },
-      data: {
-        status: approved ? 'approved' : 'denied',
-        decision: approved ? 'approve' : 'deny',
-        resolvedAt: new Date(),
-      },
-    })
-
-    return true
+  getPendingForRun(runId: string) {
+    return this.repository.listPending(runId)
   }
 
-  async getPendingForRun(runId: string) {
-    return prisma.approval.findMany({ where: { runId, status: 'pending' }, orderBy: { createdAt: 'asc' } })
-  }
-
-  async getForRun(runId: string) {
-    return prisma.approval.findMany({ where: { runId }, orderBy: { createdAt: 'asc' } })
+  getForRun(runId: string) {
+    return this.repository.listForRun(runId)
   }
 }

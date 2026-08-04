@@ -1,29 +1,28 @@
-import { prisma } from '../../db/client.js'
-import { PrismaAgentSession } from '../history/agent-session-store.js'
 import {
-  loadSessionCompactionOptions,
   persistCompactionMessage,
 } from '../history/session-compaction.js'
-import { appendTimelineEvent, TimelineEventStore } from '../events/timeline-event-store.js'
-
-function titleFromMessage(message: string): string {
-  const title = message.replace(/\s+/g, ' ').trim()
-  if (!title) return 'New Task'
-  return title.length > 64 ? `${title.slice(0, 61)}...` : title
-}
+import { TimelineEventStore } from '../events/timeline-event-store.js'
+import { LegacyTimelineMigration } from './legacy-timeline-migration.js'
+import {
+  PrismaConversationRepository,
+  type ConversationRepository,
+} from './conversation-repository.js'
+import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../chat/agent-runtime.js'
 
 export class ConversationService {
-  constructor(private readonly timelineStore: TimelineEventStore) {}
+  constructor(
+    private readonly timelineStore: TimelineEventStore,
+    private readonly repository: ConversationRepository = new PrismaConversationRepository(),
+    private readonly legacyTimelineMigration: LegacyTimelineMigration = new LegacyTimelineMigration(),
+    private readonly sessionFactory: AgentSessionFactory = new DefaultAgentSessionFactory(),
+  ) {}
 
   async list(projectId: string) {
-    return prisma.conversation.findMany({
-      where: { projectId, status: 'active' },
-      orderBy: { updatedAt: 'desc' },
-    })
+    return this.repository.list(projectId)
   }
 
   async get(id: string) {
-    const conversation = await prisma.conversation.findUnique({ where: { id } })
+    const conversation = await this.repository.get(id)
     if (!conversation) throw new Error(`Conversation not found: ${id}`)
     return conversation
   }
@@ -31,14 +30,7 @@ export class ConversationService {
   async delete(id: string) {
     const conversation = await this.get(id)
     if (conversation.status === 'archived') return conversation
-
-    return prisma.conversation.update({
-      where: { id },
-      data: {
-        status: 'archived',
-        updatedAt: new Date(),
-      },
-    })
+    return this.repository.archive(id)
   }
 
   async startTurn(data: {
@@ -46,65 +38,12 @@ export class ConversationService {
     message: string
     clientMessageId: string
   }) {
-    const existing = await prisma.agentRun.findFirst({
-      where: {
-        clientMessageId: data.clientMessageId,
-        conversation: { projectId: data.projectId },
-      },
-      include: { conversation: true },
-    })
-    if (existing) return { conversation: existing.conversation, run: existing, created: false }
+    const existing = await this.repository.findByClientMessage(data.projectId, data.clientMessageId)
+    if (existing) return { ...existing, created: false }
 
-    return prisma.$transaction(async (tx) => {
-      const conversation = await tx.conversation.create({
-        data: {
-          projectId: data.projectId,
-          title: titleFromMessage(data.message),
-          nextRunSequence: 1,
-        },
-      })
-
-      await tx.agentSession.create({
-        data: {
-          conversationId: conversation.id,
-          sessionKey: `local:${conversation.id}`,
-        },
-      })
-
-      const run = await tx.agentRun.create({
-        data: {
-          conversationId: conversation.id,
-          clientMessageId: data.clientMessageId,
-          sequence: 1,
-          status: 'queued',
-          input: data.message,
-        },
-      })
-
-      const userMessage = await tx.message.create({
-        data: {
-          conversationId: conversation.id,
-          runId: run.id,
-          role: 'user',
-          content: data.message,
-        },
-      })
-
-      const startedEvent = await appendTimelineEvent(
-        tx,
-        conversation.id,
-        run.id,
-        'turn.started',
-        {
-          title: conversation.title,
-          userMessageId: userMessage.id,
-          userText: data.message,
-          assistantMessageId: run.id,
-        },
-      )
-
-      return { conversation, run, created: true, startedEvent }
-    })
+    const result = await this.repository.createInitialTurn(data)
+    this.timelineStore.publish(result.startedEvent)
+    return { ...result, created: true }
   }
 
   async continueTurn(data: {
@@ -117,58 +56,11 @@ export class ConversationService {
       throw new Error(`Conversation is not active: ${data.conversationId}`)
     }
 
-    const existing = await prisma.agentRun.findFirst({
-      where: { conversationId: conversation.id, clientMessageId: data.clientMessageId },
-    })
+    const existing = await this.repository.findTurn(conversation.id, data.clientMessageId)
     if (existing) return { conversation, run: existing, created: false }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const sequence = (await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { nextRunSequence: { increment: 1 } },
-        select: { nextRunSequence: true },
-      })).nextRunSequence
-
-      const nextRun = await tx.agentRun.create({
-        data: {
-          conversationId: conversation.id,
-          clientMessageId: data.clientMessageId,
-          sequence,
-          status: 'queued',
-          input: data.message,
-        },
-      })
-
-      const userMessage = await tx.message.create({
-        data: {
-          conversationId: conversation.id,
-          runId: nextRun.id,
-          role: 'user',
-          content: data.message,
-        },
-      })
-
-      await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() },
-      })
-
-      const startedEvent = await appendTimelineEvent(
-        tx,
-        conversation.id,
-        nextRun.id,
-        'turn.started',
-        {
-          title: conversation.title,
-          userMessageId: userMessage.id,
-          userText: data.message,
-          assistantMessageId: nextRun.id,
-        },
-      )
-
-      return { run: nextRun, startedEvent }
-    })
-
+    const result = await this.repository.createNextTurn({ ...data, title: conversation.title })
+    this.timelineStore.publish(result.startedEvent)
     return { conversation, run: result.run, created: true, startedEvent: result.startedEvent }
   }
 
@@ -176,7 +68,8 @@ export class ConversationService {
     const conversation = await this.get(id)
     let events = await this.timelineStore.list(id)
     if (events.length === 0) {
-      await this.backfillLegacyTimeline(id, conversation.title)
+      const migrated = await this.legacyTimelineMigration.backfill(id, conversation.title)
+      for (const event of migrated) this.timelineStore.publish(event)
       events = await this.timelineStore.list(id)
     }
     return { conversation, events }
@@ -187,20 +80,13 @@ export class ConversationService {
     if (conversation.status !== 'active') {
       throw new Error(`Conversation is not active: ${id}`)
     }
-
-    const activeRun = await prisma.agentRun.findFirst({
-      where: {
-        conversationId: id,
-        status: { in: ['queued', 'running', 'waiting_approval'] },
-      },
-    })
-    if (activeRun) {
+    if (await this.repository.hasActiveRun(id)) {
       throw new Error('Cannot compact context while a run is active')
     }
 
     const sessionId = await this.getSessionId(id)
     const events: import('@superagent/core').AnyTimelineEvent[] = []
-    const session = new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), {
+    const session = this.sessionFactory.createSession(sessionId, {
       started: async ({ id: compactionId, trigger }) => {
         events.push(await this.timelineStore.append(id, null, 'context_compaction.started', {
           id: compactionId,
@@ -227,108 +113,11 @@ export class ConversationService {
     const result = await session.compact('manual')
     if (result.status !== 'compacted') return { ...result, events }
     await persistCompactionMessage(sessionId, result)
-    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    await this.repository.touch(id)
     return { ...result, events }
   }
 
-  async getSessionId(conversationId: string): Promise<string> {
-    const session = await prisma.agentSession.findUnique({
-      where: { conversationId },
-    })
-    if (!session) throw new Error(`Agent session not found for conversation: ${conversationId}`)
-    return session.id
+  getSessionId(conversationId: string) {
+    return this.repository.getSessionId(conversationId)
   }
-
-  private async backfillLegacyTimeline(conversationId: string, title: string) {
-    await prisma.$transaction(async (tx) => {
-      if (await tx.timelineEvent.count({ where: { conversationId } }) > 0) return
-
-      const messages = await tx.message.findMany({
-        where: { conversationId },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      })
-
-      for (const message of messages) {
-        if (message.role === 'user') {
-          await appendTimelineEvent(
-            tx,
-            conversationId,
-            message.runId,
-            'turn.started',
-            {
-              title,
-              userMessageId: message.id,
-              userText: message.content,
-              assistantMessageId: message.runId ?? 'legacy-assistant-' + message.id,
-            },
-          )
-          continue
-        }
-
-        if (message.role === 'assistant') {
-          if (message.content) {
-            await appendTimelineEvent(
-              tx,
-              conversationId,
-              message.runId,
-              'message.delta',
-              { messageId: message.id, text: message.content },
-            )
-          }
-          if (message.runId) {
-            await appendTimelineEvent(
-              tx,
-              conversationId,
-              message.runId,
-              'run.completed',
-              { output: message.content },
-            )
-          }
-          continue
-        }
-
-        if (message.role === 'system') {
-          const payload = parseCompactionPayload(message.content)
-          if (!payload) continue
-          await appendTimelineEvent(
-            tx,
-            conversationId,
-            message.runId,
-            'context_compaction.completed',
-            {
-              id: message.id,
-              trigger: payload.trigger,
-              compactedItems: payload.compactedItems,
-              keptItems: payload.keptItems,
-              reason: payload.reason,
-            },
-          )
-        }
-      }
-    })
-  }
-}
-
-function parseCompactionPayload(content: string): {
-  trigger: 'auto' | 'manual'
-  compactedItems: number
-  keptItems: number
-  reason?: string
-} | undefined {
-  try {
-    const payload = JSON.parse(content) as Record<string, unknown>
-    if (payload.kind !== 'context_compaction') return undefined
-    return {
-      trigger: payload.trigger === 'manual' ? 'manual' : 'auto',
-      compactedItems: numberValue(payload.compactedItems) ?? 0,
-      keptItems: numberValue(payload.keptItems) ?? 0,
-      reason: typeof payload.reason === 'string' ? payload.reason : undefined,
-    }
-  } catch {
-    return undefined
-  }
-}
-
-function numberValue(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
