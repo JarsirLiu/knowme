@@ -187,6 +187,8 @@ export function ensureDatabase(): Promise<void> {
 
 async function initializeDatabase() {
   await prisma.$connect()
+  await prisma.$queryRawUnsafe('PRAGMA busy_timeout = 5000')
+  await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL')
   await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON')
 
   for (const statement of TABLES) {

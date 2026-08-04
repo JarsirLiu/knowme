@@ -6,4 +6,6 @@ node_modules/
 *.tsbuildinfo
 dist/
 server/prisma/data.db
+server/prisma/data.db-*
+.data/
 .workbuddy/

@@ -44,7 +44,8 @@ pnpm run dev:web
 
 - 前端端口：`3800`
 - 后端端口：`3801`
-- SQLite：`server/prisma/data.db`
+- SQLite：`.data/data.db`
+- 临时资源：`.data/temp/`
 
 ## 常用命令
 

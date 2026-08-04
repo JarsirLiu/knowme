@@ -366,7 +366,7 @@ SQLite 使用 WAL 模式。数据库只保存结构化状态和资源元数据�
 
 ```text
 .superagent/
-  data.db
+  .data/data.db
   artifacts/
   logs/
   skills/

@@ -4,7 +4,6 @@
  */
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../src/config.js';
@@ -12,6 +11,8 @@ import { createCodingAgent } from '../src/agent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MOCK_PORT = 3901;
+const tempRoot = path.resolve(__dirname, '..', '.data', 'temp');
+fs.mkdirSync(tempRoot, { recursive: true });
 
 // 1. 启动 mock 服务
 const mock = spawn(process.execPath, [path.join(__dirname, 'mock-llm.js')], {
@@ -24,7 +25,7 @@ const results = { toolCalls: [], approvalRequested: false, finalText: '', textDe
 
 try {
   // 2. 创建 agent，指向 mock 服务
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-e2e-'));
+  const ws = fs.mkdtempSync(path.join(tempRoot, 'e2e-'));
   fs.writeFileSync(path.join(ws, 'demo.txt'), 'hello');
   const cfg = loadConfig({
     baseURL: `http://localhost:${MOCK_PORT}/v1`,

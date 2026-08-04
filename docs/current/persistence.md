@@ -5,9 +5,10 @@
 ## 存储
 
 当前使用 Prisma Client + SQLite，数据库默认是
-`server/prisma/data.db`。应用启动时 `ensureDatabase` 会连接数据库、启用外键，
-并兼容早期本地数据库的补表/补字段逻辑。这个启动补丁机制仍在使用，但新结构
-变更不应继续依赖它作为长期 migration 方案。
+`.data/data.db`。应用启动时会确保 `.data/` 存在，然后由 `ensureDatabase` 连接数据库、启用外键，
+设置 WAL journal mode 和 5 秒 busy timeout，并兼容早期本地数据库的补表/补字段
+逻辑。这个启动补丁机制仍在使用，但新结构变更不应继续依赖它作为长期 migration
+方案。
 
 ## 主要模型
 

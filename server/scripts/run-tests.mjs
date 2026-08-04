@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const serverDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-server-test-'))
+const tempRoot = path.resolve(serverDir, '..', '.data', 'temp')
+fs.mkdirSync(tempRoot, { recursive: true })
+const tempDir = fs.mkdtempSync(path.join(tempRoot, 'server-test-'))
 const dbPath = path.join(tempDir, 'test.db').replace(/\\/g, '/')
 
 const child = spawn('tsx --test test/*.test.ts', {

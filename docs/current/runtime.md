@@ -117,6 +117,9 @@ Agents SDK RunStreamEvent
 
 ## 运行时修改要求
 
+服务收到 `SIGINT` 或 `SIGTERM` 时，会先关闭 Fastify、停止 RunCoordinator，
+再断开 Prisma 数据库连接；重复信号不会重复执行关闭流程。
+
 修改状态转换、恢复、取消、审批或事件顺序时，必须同时检查：
 
 - `server/src/modules/runs/`

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { createApp } from '../src/app.js'
@@ -16,13 +15,23 @@ import { extractRawStreamDelta } from '../src/modules/chat/turn.service.js'
 import { RunCoordinator } from '../src/modules/runs/run-coordinator.js'
 import { TimelineEventHub } from '../src/modules/events/timeline-event-hub.js'
 
-const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'superagent-test-'))
+const tempRoot = path.resolve(process.cwd(), '..', '.data', 'temp')
+fs.mkdirSync(tempRoot, { recursive: true })
+const workspace = fs.mkdtempSync(path.join(tempRoot, 'server-workspace-'))
 let projectId: string
 let primaryConversationId: string
 const timelineStore = new TimelineEventStore()
 
 test.before(async () => {
   await ensureDatabase()
+})
+
+test('configures SQLite for concurrent local access', async () => {
+  const journalMode = await prisma.$queryRawUnsafe<Array<{ journal_mode: string }>>('PRAGMA journal_mode')
+  const busyTimeout = await prisma.$queryRawUnsafe<Array<{ timeout: number }>>('PRAGMA busy_timeout')
+
+  assert.equal(journalMode[0]?.journal_mode.toLowerCase(), 'wal')
+  assert.equal(Number(busyTimeout[0]?.timeout), 5000)
 })
 
 test('normalizes reasoning and message streaming events from Agents SDK providers', () => {
