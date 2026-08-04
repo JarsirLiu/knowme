@@ -2,6 +2,10 @@ import type { AgentRun } from '@prisma/client'
 import type { AnyTimelineEvent } from '@superagent/core'
 import { prisma } from '../../db/client.js'
 import { appendTimelineEvent } from '../events/timeline-event-store.js'
+import {
+  PrismaAgentSessionLifecycleRepository,
+  type AgentSessionLifecycleRepository,
+} from '../history/session-lifecycle-repository.js'
 
 export type PendingApproval = {
   toolCallId: string
@@ -24,6 +28,10 @@ export interface AgentRunRepository {
 }
 
 export class PrismaAgentRunRepository implements AgentRunRepository {
+  constructor(
+    private readonly sessionLifecycleRepository: AgentSessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository(),
+  ) {}
+
   get(id: string) {
     return prisma.agentRun.findUnique({ where: { id } })
   }
@@ -58,7 +66,12 @@ export class PrismaAgentRunRepository implements AgentRunRepository {
         },
       })
       if (updated.count !== 1) throw new Error(`Run lease lost: ${id}`)
-      await tx.conversation.update({ where: { id: conversationId }, data: { activeRunId: null } })
+      const released = await tx.conversation.updateMany({
+        where: { id: conversationId, activeRunId: id },
+        data: { activeRunId: null },
+      })
+      if (released.count !== 1) throw new Error(`Conversation active run lease lost: ${conversationId}`)
+      await this.sessionLifecycleRepository.touchByConversation(conversationId, tx)
       events.push(await appendTimelineEvent(tx, conversationId, id, 'run.waiting_approval', {}))
       for (const approval of approvals) {
         await tx.approval.upsert({
@@ -112,7 +125,12 @@ export class PrismaAgentRunRepository implements AgentRunRepository {
           update: { content: output },
         })
       }
-      await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date(), activeRunId: null } })
+      const released = await tx.conversation.updateMany({
+        where: { id: conversationId, activeRunId: id },
+        data: { updatedAt: new Date(), activeRunId: null },
+      })
+      if (released.count !== 1) throw new Error(`Conversation active run lease lost: ${conversationId}`)
+      await this.sessionLifecycleRepository.touchByConversation(conversationId, tx)
       completedEvent = await appendTimelineEvent(tx, conversationId, id, 'run.completed', { output })
     })
     return completedEvent!

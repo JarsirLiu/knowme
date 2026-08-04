@@ -9,6 +9,8 @@ import { PrismaRunLifecycleRepository } from './run-lifecycle-repository.js'
 
 const LEASE_MS = 30_000
 const POLL_MS = 500
+const MAX_RECOVERY_ATTEMPTS = 3
+const DEFAULT_MAX_CONCURRENT_RUNS = 4
 
 /** Coordinates durable run scheduling and execution without owning persistence details. */
 export class RunCoordinator {
@@ -21,6 +23,7 @@ export class RunCoordinator {
   private timer: NodeJS.Timeout | undefined
   private ticking = false
   private stopping = false
+  private readonly maxConcurrentRuns: number
 
   constructor(
     conversationService: ConversationService,
@@ -29,10 +32,14 @@ export class RunCoordinator {
     executor?: AgentRunExecutor,
     scheduler?: RunScheduler,
     lifecycleRepository?: PrismaRunLifecycleRepository,
+    maxConcurrentRuns = Number(process.env.SUPERAGENT_MAX_CONCURRENT_RUNS || DEFAULT_MAX_CONCURRENT_RUNS),
   ) {
     this.executor = executor ?? new AgentRunExecutor(conversationService, approvalService, timelineStore)
     this.scheduler = scheduler ?? new RunScheduler()
     this.lifecycleRepository = lifecycleRepository ?? new PrismaRunLifecycleRepository()
+    this.maxConcurrentRuns = Number.isFinite(maxConcurrentRuns) && maxConcurrentRuns > 0
+      ? Math.floor(maxConcurrentRuns)
+      : DEFAULT_MAX_CONCURRENT_RUNS
   }
 
   async start(): Promise<void> {
@@ -80,6 +87,7 @@ export class RunCoordinator {
       await this.recoverExpiredRuns()
       await this.promoteResolvedApprovals()
       for (;;) {
+        if (this.executions.size >= this.maxConcurrentRuns) return
         const claimed = await this.claimNext()
         if (!claimed) return
         const execution = this.executeClaimed(claimed.id)
@@ -114,7 +122,11 @@ export class RunCoordinator {
     } catch (error) {
       const current = await this.lifecycleRepository.get(runId)
       if (!current || current.status !== 'running' || current.leaseOwner !== this.owner) return
-      const cancelled = controller.signal.aborted || Boolean(current.cancelRequestedAt)
+      const cancelled = !this.stopping && (controller.signal.aborted || Boolean(current.cancelRequestedAt))
+      if (!cancelled && current.state && current.attempt < MAX_RECOVERY_ATTEMPTS) {
+        await this.retryFromCheckpoint(current, current.state)
+        return
+      }
       const message = cancelled ? 'Run cancelled by user' : error instanceof Error ? error.message : String(error)
       const event = await this.lifecycleRepository.fail(
         runId,
@@ -130,12 +142,17 @@ export class RunCoordinator {
     }
   }
 
+  private async retryFromCheckpoint(run: { id: string; conversationId: string; leaseOwner: string | null }, state: string) {
+    if (!run.leaseOwner) return
+    await this.lifecycleRepository.requeueFromCheckpoint(run.id, run.conversationId, state, run.leaseOwner)
+  }
+
   private async recoverAfterRestart(): Promise<void> {
     const now = new Date()
     const running = await this.lifecycleRepository.findRunning()
     for (const run of running) {
       if (run.leaseExpiresAt && run.leaseExpiresAt > now) continue
-      const event = await this.lifecycleRepository.recoverRunning(run)
+      const event = await this.lifecycleRepository.recoverRunning(run, MAX_RECOVERY_ATTEMPTS)
       if (event) this.timelineStore.publish(event)
     }
 
@@ -154,7 +171,7 @@ export class RunCoordinator {
   private async recoverExpiredRuns(): Promise<void> {
     const expired = await this.lifecycleRepository.findExpired()
     for (const run of expired) {
-      const event = await this.lifecycleRepository.recoverExpired(run)
+      const event = await this.lifecycleRepository.recoverExpired(run, MAX_RECOVERY_ATTEMPTS)
       if (event) this.timelineStore.publish(event)
     }
   }

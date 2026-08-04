@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Conversation, Project } from '@superagent/core'
 import { Sidebar } from '@/components/Sidebar/Sidebar'
 import { Header, MessageList, InputBar, useAgentChat } from '@/features/chat'
-import type { ActiveConversation } from '@/features/chat/hooks/useAgentChat'
+import type { ActiveConversation, ConversationDisplayStatus } from '@/features/chat/hooks/useAgentChat'
 import { client } from '@/api/client'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
@@ -30,9 +30,9 @@ export default function HomeClient() {
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null)
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
 
-  const handleConversationCreated = useCallback((data: { conversationId: string; title: string }) => {
+  const handleConversationCreated = useCallback((data: { conversationId: string; title: string; draftId: string; projectId: string }) => {
     setActive((current) => {
-      if (!current || current.kind !== 'draft') return current
+      if (!current || current.kind !== 'draft' || current.draftId !== data.draftId || current.projectId !== data.projectId) return current
       return {
         kind: 'persisted',
         conversationId: data.conversationId,
@@ -40,21 +40,22 @@ export default function HomeClient() {
       }
     })
     setConversationsByProject((current) => {
-      if (!activeProjectId) return current
-      const existing = current[activeProjectId] ?? []
+      const existing = current[data.projectId] ?? []
       if (existing.some((conversation) => conversation.id === data.conversationId)) return current
+      const now = new Date().toISOString()
       const conversation: Conversation = {
         id: data.conversationId,
-        projectId: activeProjectId,
+        projectId: data.projectId,
         title: data.title,
         status: 'active',
         agentProfile: 'coding',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        runtimeStatus: 'queued',
+        createdAt: now,
+        updatedAt: now,
       }
-      return { ...current, [activeProjectId]: [conversation, ...existing] }
+      return { ...current, [data.projectId]: [conversation, ...existing] }
     })
-  }, [activeProjectId])
+  }, [])
 
   const {
     entries,
@@ -64,7 +65,16 @@ export default function HomeClient() {
     approveTool,
     denyTool,
     stop,
+    disposeConversation,
+    statusByConversation,
   } = useAgentChat(active, handleConversationCreated)
+
+  const persistedConversationStatuses = Object.fromEntries(
+    Object.values(conversationsByProject)
+      .flat()
+      .map((conversation) => [conversation.id, conversation.runtimeStatus ?? 'idle']),
+  ) as Record<string, ConversationDisplayStatus>
+  const conversationStatuses = { ...persistedConversationStatuses, ...statusByConversation }
 
   useEffect(() => {
     let cancelled = false
@@ -96,18 +106,17 @@ export default function HomeClient() {
   }, [])
 
   const handleNew = useCallback((projectId: string) => {
-    if (!projectId || isLoading) return
+    if (!projectId) return
     setActiveProjectId(projectId)
     setActive(createDraft(projectId))
     setInput('')
     setMobileNavOpen(false)
-  }, [activeProjectId, isLoading])
+  }, [])
 
   const handleNewProject = useCallback(() => {
-    if (isLoading) return
     setSelectedDirectory(null)
     setProjectModalOpen(true)
-  }, [isLoading])
+  }, [])
 
   const handleCreateProject = useCallback(async ({ name, rootPath }: { name: string; rootPath: string }) => {
     setCreatingProject(true)
@@ -146,7 +155,6 @@ export default function HomeClient() {
   }, [handleCreateProject])
 
   const handleSelectProject = useCallback((projectId: string) => {
-    if (isLoading) return
     setActiveProjectId(projectId)
     const firstConversation = conversationsByProject[projectId]?.[0]
     setActive(firstConversation
@@ -154,18 +162,17 @@ export default function HomeClient() {
       : createDraft(projectId))
     setInput('')
     setMobileNavOpen(false)
-  }, [conversationsByProject, isLoading])
+  }, [conversationsByProject])
 
   const handleSelectConversation = useCallback((conversationId: string, projectId: string) => {
-    if (isLoading) return
     setActiveProjectId(projectId)
     setActive({ kind: 'persisted', conversationId, projectId })
     setInput('')
     setMobileNavOpen(false)
-  }, [isLoading])
+  }, [])
 
   const handleDeleteConversation = useCallback(async (conversationId: string, projectId: string) => {
-    if (isLoading || deletingConversationId) return
+    if (deletingConversationId) return
     const conversations = conversationsByProject[projectId] ?? []
     const target = conversations.find((conversation) => conversation.id === conversationId)
     if (!target) return
@@ -174,6 +181,7 @@ export default function HomeClient() {
     setDeletingConversationId(conversationId)
     try {
       await client.deleteConversation(conversationId)
+      disposeConversation(conversationId)
       const nextConversations = conversations.filter((conversation) => conversation.id !== conversationId)
       setConversationsByProject((current) => ({
         ...current,
@@ -195,10 +203,10 @@ export default function HomeClient() {
     } finally {
       setDeletingConversationId(null)
     }
-  }, [active, conversationsByProject, deletingConversationId, isLoading])
+  }, [active, conversationsByProject, deletingConversationId, disposeConversation])
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim()) return
     if (!active) {
       setProjectModalOpen(true)
       return
@@ -206,7 +214,7 @@ export default function HomeClient() {
     const message = input
     setInput('')
     void sendMessage(message)
-  }, [active, input, isLoading, sendMessage])
+  }, [active, input, sendMessage])
 
   const activeTitle = active?.kind === 'persisted'
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
@@ -224,7 +232,7 @@ export default function HomeClient() {
         conversationsByProject={conversationsByProject}
         activeProjectId={activeProjectId}
         active={active}
-        isLoading={isLoading}
+        conversationStatuses={conversationStatuses}
         mobileOpen={mobileNavOpen}
         onSelectProject={handleSelectProject}
         onSelectConversation={handleSelectConversation}

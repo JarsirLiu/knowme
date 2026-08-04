@@ -63,10 +63,31 @@ queued -> running -> completed
 
 Executor 不应该自己创建 HTTP response、启动调度 timer 或直接决定下一条 Run。
 
+### Checkpoint recovery
+
+During execution, the executor keeps the latest SDK `RunState` when the stream
+fails or is aborted. A run with a checkpoint is returned to `queued` and may be
+resumed up to three attempts; user cancellation still ends the run immediately.
+An SDK stream that ends without a final output is treated as an incomplete run
+and follows the same bounded recovery path instead of being marked completed.
+
 ### `AgentRuntime`
 
 是服务端和 `@superagent/agent` 之间的适配端口。它隐藏 Agent 创建、Session
 构造和 SDK Runner 细节，便于单测 Executor 和未来替换运行内核。
+
+不同 Conversation 的 Run 可以由 Coordinator 并行执行，默认上限为 4，可通过
+`SUPERAGENT_MAX_CONCURRENT_RUNS` 调整；同一 Conversation 仍由 `activeRunId`
+保证最多一个 active Run。每个 Conversation 独立拥有 AgentSession、checkpoint、
+Timeline 和 SSE 订阅。
+
+AgentSession 持久化 `active`、`archived` 状态、`lastActivityAt` 和 `archivedAt`。
+`PrismaAgentSessionLifecycleRepository` 统一负责这些生命周期字段；Session item
+写入、Run claim、Run 状态收尾及 Conversation 归档都会通过它更新元数据；
+Session 本身跨 Run 保持打开，不在单轮执行结束时销毁。
+
+Conversation API 同时返回由 Run 状态聚合出的 `runtimeStatus`，前端历史 hydration
+以该状态恢复 loading 和 Sidebar 状态，而不是从 Timeline 最后一条事件猜测。
 
 ## 审批恢复
 
@@ -86,11 +107,16 @@ Run 已无 pending approval 后再重新排队，避免审批接口直接运行 
 每个 Coordinator 有唯一 owner。claim 后 Run 获得有限期 lease；执行中通过
 heartbeat 刷新。服务重启、owner 退出或 lease 过期时：
 
-- 有 state：清除旧 owner 后重新排队，从 checkpoint 恢复。
+- 有 state 且恢复次数未达到三次：清除旧 owner 后重新排队，从 checkpoint 恢复。
+- 有 state 但已达到三次恢复：标记 `interrupted`，写入原因和 Timeline 事件。
 - 无 state：标记 `interrupted`，写入原因和 Timeline 事件。
 
 所有改变 Run 状态的持久化操作必须带上状态或 lease owner 条件，防止旧执行者在
 失去所有权后覆盖新执行者的结果。
+
+恢复 Run、释放 `activeRunId` 和更新时间在同一个事务中完成，并使用旧
+`leaseOwner`/`leaseExpiresAt` 快照作为条件。Conversation 归档会在同一事务中拒绝
+任何 active Run；调度器也只 claim active Conversation。
 
 ## Timeline 与 SSE
 

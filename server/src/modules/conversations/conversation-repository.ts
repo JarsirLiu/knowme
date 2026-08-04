@@ -1,6 +1,12 @@
 import type { AgentRun, Conversation } from '@prisma/client'
+import type { ConversationRuntimeStatus } from '@superagent/core'
 import { prisma } from '../../db/client.js'
 import { appendTimelineEvent } from '../events/timeline-event-store.js'
+import { ConversationHasActiveRunError } from './conversation-errors.js'
+import {
+  PrismaAgentSessionLifecycleRepository,
+  type AgentSessionLifecycleRepository,
+} from '../history/session-lifecycle-repository.js'
 import type { AnyTimelineEvent } from '@superagent/core'
 
 export type TurnCreation = {
@@ -30,21 +36,60 @@ export interface ConversationRepository {
 }
 
 export class PrismaConversationRepository implements ConversationRepository {
+  constructor(
+    private readonly sessionLifecycleRepository: AgentSessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository(),
+  ) {}
+
   async list(projectId: string) {
-    return prisma.conversation.findMany({
+    const conversations = await prisma.conversation.findMany({
       where: { projectId, status: 'active' },
       orderBy: { updatedAt: 'desc' },
+      include: {
+        runs: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     })
+    return conversations.map(({ runs, ...conversation }) => withRuntimeStatus(conversation, runs))
   }
 
   async get(id: string) {
-    return prisma.conversation.findUnique({ where: { id } })
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        runs: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    })
+    if (!conversation) return null
+    const { runs, ...baseConversation } = conversation
+    return withRuntimeStatus(baseConversation, runs)
   }
 
   async archive(id: string) {
-    return prisma.conversation.update({
-      where: { id },
-      data: { status: 'archived', updatedAt: new Date() },
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.conversation.findUnique({
+        where: { id },
+        select: { status: true },
+      })
+      if (!current) throw new Error(`Conversation not found: ${id}`)
+      if (current.status === 'archived') return tx.conversation.findUniqueOrThrow({ where: { id } })
+
+      const activeRun = await tx.agentRun.findFirst({
+        where: { conversationId: id, status: { in: ACTIVE_RUN_STATUSES } },
+        select: { id: true },
+      })
+      if (activeRun) throw new ConversationHasActiveRunError(id)
+
+      const conversation = await tx.conversation.update({
+        where: { id },
+        data: { status: 'archived', updatedAt: new Date() },
+      })
+      await this.sessionLifecycleRepository.archiveByConversation(id, tx)
+      return conversation
     })
   }
 
@@ -53,7 +98,10 @@ export class PrismaConversationRepository implements ConversationRepository {
       where: { clientMessageId, conversation: { projectId } },
       include: { conversation: true },
     })
-    return existing ? { conversation: existing.conversation, run: existing } : null
+    if (!existing) return null
+    const conversation = await this.get(existing.conversation.id)
+    if (!conversation) return null
+    return { conversation, run: existing }
   }
 
   async createInitialTurn(data: TurnCreation) {
@@ -91,7 +139,7 @@ export class PrismaConversationRepository implements ConversationRepository {
         userText: data.message,
         assistantMessageId: run.id,
       })
-      return { conversation, run, startedEvent }
+      return { conversation: { ...conversation, runtimeStatus: 'queued' as const }, run, startedEvent }
     })
   }
 
@@ -127,6 +175,7 @@ export class PrismaConversationRepository implements ConversationRepository {
         where: { id: data.conversationId },
         data: { updatedAt: new Date() },
       })
+      await this.sessionLifecycleRepository.touchByConversation(data.conversationId, tx)
       const startedEvent = await appendTimelineEvent(tx, data.conversationId, run.id, 'turn.started', {
         title: data.title,
         userMessageId: userMessage.id,
@@ -152,8 +201,32 @@ export class PrismaConversationRepository implements ConversationRepository {
   }
 
   async touch(id: string) {
-    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    await prisma.$transaction(async (tx) => {
+      await tx.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+      await this.sessionLifecycleRepository.touchByConversation(id, tx)
+    })
   }
+}
+
+const ACTIVE_RUN_STATUSES = ['queued', 'running', 'waiting_approval']
+
+function withRuntimeStatus(
+  conversation: Omit<Conversation, 'runs'>,
+  runs: Array<{ status: string }>,
+) {
+  return {
+    ...conversation,
+    runtimeStatus: runtimeStatusForRuns(runs),
+  }
+}
+
+function runtimeStatusForRuns(runs: Array<{ status: string }>): ConversationRuntimeStatus {
+  if (runs.some((run) => run.status === 'running')) return 'running'
+  if (runs.some((run) => run.status === 'waiting_approval')) return 'waiting_approval'
+  if (runs.some((run) => run.status === 'queued')) return 'queued'
+  const latest = runs[0]?.status
+  if (latest === 'failed' || latest === 'interrupted' || latest === 'cancelled') return latest
+  return 'idle'
 }
 
 function titleFromMessage(message: string): string {

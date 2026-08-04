@@ -33,6 +33,9 @@ const TABLES = [
     "id" TEXT NOT NULL PRIMARY KEY,
     "conversationId" TEXT NOT NULL,
     "sessionKey" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "lastActivityAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "archivedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AgentSession_conversationId_fkey"
@@ -203,6 +206,9 @@ async function initializeDatabase() {
   await addColumnIfMissing('Conversation', 'nextRunSequence', 'INTEGER NOT NULL DEFAULT 0')
   await addColumnIfMissing('Conversation', 'activeRunId', 'TEXT')
   await addColumnIfMissing('AgentRun', 'sequence', 'INTEGER NOT NULL DEFAULT 0')
+  await addColumnIfMissing('AgentSession', 'status', 'TEXT NOT NULL DEFAULT \'active\'')
+  await addColumnIfMissing('AgentSession', 'lastActivityAt', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP')
+  await addColumnIfMissing('AgentSession', 'archivedAt', 'DATETIME')
   const duplicateClaims = await prisma.$queryRawUnsafe<Array<{ activeRunId: string; count: bigint }>>(
     'SELECT "activeRunId", COUNT(*) AS "count" FROM "Conversation" WHERE "activeRunId" IS NOT NULL GROUP BY "activeRunId" HAVING COUNT(*) > 1',
   )

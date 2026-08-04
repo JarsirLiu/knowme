@@ -61,7 +61,12 @@ export class ConversationService {
 
     const result = await this.repository.createNextTurn({ ...data, title: conversation.title })
     this.timelineStore.publish(result.startedEvent)
-    return { conversation, run: result.run, created: true, startedEvent: result.startedEvent }
+    return {
+      conversation: { ...conversation, runtimeStatus: 'queued' as const },
+      run: result.run,
+      created: true,
+      startedEvent: result.startedEvent,
+    }
   }
 
   async getTimeline(id: string) {

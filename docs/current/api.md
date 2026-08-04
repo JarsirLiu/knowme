@@ -19,7 +19,7 @@
 | `POST` | `/api/conversations/:conversationId/turns` | 已有会话追加消息并排队 Run |
 | `GET` | `/api/conversations/:conversationId/timeline` | 查询持久化 Timeline |
 | `GET` | `/api/conversations/:conversationId/events` | SSE 订阅；支持 `Last-Event-ID` |
-| `DELETE` | `/api/conversations/:conversationId` | 删除会话及其级联数据 |
+| `DELETE` | `/api/conversations/:conversationId` | 归档会话并隐藏其历史 |
 | `POST` | `/api/conversations/:conversationId/context/compact` | 手动触发上下文压缩 |
 | `POST` | `/api/conversations/:conversationId/runs/:runId/cancel` | 请求取消 Run |
 
@@ -34,6 +34,11 @@ Turn body 当前是：
 
 `clientMessageId` 用于重试幂等。客户端若未提供，路由会生成 UUID，但需要可靠
 重试的调用方应自行稳定保存该 ID。
+
+Conversation 列表、Timeline 和 Turn 响应中的 `conversation.runtimeStatus` 描述
+当前运行态：`idle`、`queued`、`running`、`waiting_approval`、`failed`、
+`interrupted` 或 `cancelled`。删除/归档仍有活动 Run（包括 queued、running 和
+waiting_approval）时返回 HTTP 409，调用方应等待收尾或先取消 Run。
 
 ## 审批与设备
 

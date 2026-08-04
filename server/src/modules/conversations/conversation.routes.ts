@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import type { TurnService } from '../chat/turn.service.js'
 import type { ConversationService } from './conversation.service.js'
+import { ConversationHasActiveRunError } from './conversation-errors.js'
 
 export function registerConversationRoutes(
   app: FastifyInstance,
@@ -16,7 +17,14 @@ export function registerConversationRoutes(
 
   app.delete('/api/conversations/:conversationId', async (req, reply) => {
     const { conversationId } = req.params as { conversationId: string }
-    await conversationService.delete(conversationId)
+    try {
+      await conversationService.delete(conversationId)
+    } catch (error) {
+      if (error instanceof ConversationHasActiveRunError) {
+        return reply.status(409).send({ code: error.code, error: 'Cannot archive a conversation with an active run' })
+      }
+      throw error
+    }
     return reply.status(204).send()
   })
 

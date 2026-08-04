@@ -12,11 +12,15 @@ import type {
   Turn,
 } from '../types'
 import type { AnyTimelineEvent } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@superagent/core'
 
 export type ChatAction =
-  | { type: 'LOAD_ENTRIES'; entries: ChatEntry[] }
+  | { type: 'LOAD_ENTRIES'; entries: ChatEntry[]; runtimeStatus?: ConversationRuntimeStatus }
   | { type: 'TIMELINE_EVENT'; event: AnyTimelineEvent }
+  | { type: 'REQUEST_START' }
+  | { type: 'REQUEST_END' }
   | { type: 'COMPACTION_REQUEST' }
+  | { type: 'COMPACTION_END' }
   | { type: 'TURN_START'; userId: string; userText: string; turnId: string }
   | { type: 'CONTENT_APPEND'; turnId: string; content: MessageContent }
   | { type: 'TOOL_CALL_START'; turnId: string; callId: string; name: string }
@@ -27,7 +31,7 @@ export type ChatAction =
   | { type: 'COMPACTION_UPDATE'; id: string; update: Partial<ContextCompaction> }
   | { type: 'TURN_END' }
   | { type: 'CANCEL' }
-  | { type: 'ERROR'; message: string }
+  | { type: 'ERROR'; message: string; runtimeStatus?: ConversationRuntimeStatus }
   | { type: 'RESET' }
 
 const MAX_CONTENT_LEN = 100_000
@@ -80,6 +84,29 @@ function deriveMessageStatus(msg: AssistantMessage): AssistantMessage['status'] 
   if (msg.toolCalls.some((tool) => tool.status === 'awaiting_approval')) return 'waiting_approval'
   if (msg.toolCalls.length > 0 && msg.toolCalls.every((tool) => isTerminal(tool.status)) && msg.content.length > 0) return 'completed'
   return 'streaming'
+}
+
+function isActiveRuntimeStatus(status: ConversationRuntimeStatus): boolean {
+  return status === 'queued' || status === 'running' || status === 'waiting_approval'
+}
+
+function runtimeStatusFromEntries(entries: ChatEntry[]): ConversationRuntimeStatus {
+  const latestTurn = [...entries].reverse().find((entry) => entry.type === 'turn')
+  if (latestTurn?.type !== 'turn') return 'idle'
+  if (latestTurn.turn.assistantMessage.status === 'waiting_approval') return 'waiting_approval'
+  if (latestTurn.turn.assistantMessage.status === 'streaming') return 'running'
+  return 'idle'
+}
+
+function runtimeStatusForEvent(event: AnyTimelineEvent): ConversationRuntimeStatus | undefined {
+  if (event.type === 'turn.started') return 'queued'
+  if (event.type === 'run.started' || event.type === 'run.resumed') return 'running'
+  if (event.type === 'run.waiting_approval') return 'waiting_approval'
+  if (event.type === 'run.completed') return 'idle'
+  if (event.type === 'run.failed') return 'failed'
+  if (event.type === 'run.cancelled') return 'cancelled'
+  if (event.type === 'run.interrupted') return 'interrupted'
+  return undefined
 }
 
 function addAutoCompaction(entries: ChatEntry[], compaction: ContextCompaction): ChatEntry[] {
@@ -361,19 +388,26 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'LOAD_ENTRIES':
-      return { ...state, entries: action.entries, isLoading: false, isCompacting: false, error: null }
+      {
+        const runtimeStatus = action.runtimeStatus ?? runtimeStatusFromEntries(action.entries)
+        return {
+          ...state,
+          entries: action.entries,
+          runtimeStatus,
+          isLoading: state.requestPending || isActiveRuntimeStatus(runtimeStatus),
+          isCompacting: false,
+          error: null,
+        }
+      }
 
     case 'TIMELINE_EVENT': {
       const event = action.event
+      const runtimeStatus = runtimeStatusForEvent(event) ?? state.runtimeStatus
       return {
         ...state,
         entries: applyTimelineEvent(state.entries, event),
-        isLoading: event.type === 'turn.started' || event.type === 'run.started' ||
-          event.type === 'run.resumed' || event.type === 'run.waiting_approval'
-          ? true
-          : event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled'
-            ? false
-            : state.isLoading,
+        runtimeStatus,
+        isLoading: state.requestPending || isActiveRuntimeStatus(runtimeStatus),
         isCompacting: event.type === 'context_compaction.started'
           ? true
           : event.type === 'context_compaction.completed' || event.type === 'context_compaction.failed'
@@ -382,8 +416,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
     }
 
+    case 'REQUEST_START':
+      return { ...state, runtimeStatus: 'queued', requestPending: true, isLoading: true, error: null }
+
+    case 'REQUEST_END':
+      return {
+        ...state,
+        requestPending: false,
+        isLoading: isActiveRuntimeStatus(state.runtimeStatus),
+      }
+
     case 'COMPACTION_REQUEST':
       return { ...state, isCompacting: true, error: null }
+
+    case 'COMPACTION_END':
+      return { ...state, isCompacting: false }
 
     case 'TURN_START': {
       const turn: Turn = {
@@ -391,7 +438,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         userMessage: { id: action.userId, role: 'user', status: 'completed', content: [{ type: 'text', text: action.userText }] },
         assistantMessage: { id: `assistant-${action.turnId}`, role: 'assistant', status: 'streaming', content: [], toolCalls: [], parts: [] },
       }
-      return { ...state, entries: [...state.entries, { type: 'turn', turn }], isLoading: true, error: null }
+      return { ...state, entries: [...state.entries, { type: 'turn', turn }], runtimeStatus: 'queued', requestPending: false, isLoading: true, error: null }
     }
 
     case 'CONTENT_APPEND':
@@ -428,18 +475,42 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case 'TURN_END':
-      return { ...state, entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'completed' ? turn : { ...turn, assistantMessage: { ...turn.assistantMessage, status: deriveMessageStatus(turn.assistantMessage) } }), isLoading: false }
+      return {
+        ...state,
+        entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'completed' ? turn : { ...turn, assistantMessage: { ...turn.assistantMessage, status: deriveMessageStatus(turn.assistantMessage) } }),
+        runtimeStatus: 'idle',
+        requestPending: false,
+        isLoading: false,
+      }
 
     case 'CANCEL':
-      return { ...state, entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'streaming' || turn.assistantMessage.status === 'waiting_approval'
-        ? { ...turn, assistantMessage: { ...turn.assistantMessage, status: 'incomplete' } } : turn), isLoading: false, error: null }
+      return {
+        ...state,
+        entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'streaming' || turn.assistantMessage.status === 'waiting_approval'
+          ? { ...turn, assistantMessage: { ...turn.assistantMessage, status: 'incomplete' } } : turn),
+        runtimeStatus: 'cancelled',
+        requestPending: false,
+        isLoading: false,
+        error: null,
+      }
 
     case 'ERROR':
-      return { ...state, entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'streaming' || turn.assistantMessage.status === 'waiting_approval'
-        ? { ...turn, assistantMessage: { ...turn.assistantMessage, status: 'incomplete' } } : turn), isLoading: false, isCompacting: false, error: action.message }
+      {
+        const runtimeStatus = action.runtimeStatus ?? state.runtimeStatus
+        return {
+          ...state,
+          entries: mapTurns(state.entries, (turn) => turn.assistantMessage.status === 'streaming' || turn.assistantMessage.status === 'waiting_approval'
+            ? { ...turn, assistantMessage: { ...turn.assistantMessage, status: 'incomplete' } } : turn),
+          runtimeStatus,
+          requestPending: false,
+          isLoading: isActiveRuntimeStatus(runtimeStatus),
+          isCompacting: false,
+          error: action.message,
+        }
+      }
 
     case 'RESET':
-      return { entries: [], isLoading: false, isCompacting: false, error: null }
+      return { entries: [], runtimeStatus: 'idle', requestPending: false, isLoading: false, isCompacting: false, error: null }
 
     default:
       return state

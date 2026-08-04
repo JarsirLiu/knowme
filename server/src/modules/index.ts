@@ -20,20 +20,24 @@ import { TimelineEventHub } from './events/timeline-event-hub.js'
 import { PrismaConversationRepository } from './conversations/conversation-repository.js'
 import { LegacyTimelineMigration } from './conversations/legacy-timeline-migration.js'
 import { PrismaApprovalRepository } from './approvals/approval-repository.js'
+import { PrismaAgentSessionLifecycleRepository } from './history/session-lifecycle-repository.js'
+import { RunScheduler } from './runs/run-scheduler.js'
+import { PrismaRunLifecycleRepository } from './runs/run-lifecycle-repository.js'
 
 export function registerRoutes(app: FastifyInstance) {
   const projectService = new ProjectService(new PrismaProjectRepository(), new ProjectPathValidator())
   const directoryService = new DirectoryService()
   const timelineHub = new TimelineEventHub()
   const timelineStore = new TimelineEventStore(timelineHub)
+  const sessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository()
   const conversationService = new ConversationService(
     timelineStore,
-    new PrismaConversationRepository(),
+    new PrismaConversationRepository(sessionLifecycleRepository),
     new LegacyTimelineMigration(),
   )
   const approvalService = new ApprovalService(new PrismaApprovalRepository())
   const deviceService = new DeviceService()
-  const agentRunRepository = new PrismaAgentRunRepository()
+  const agentRunRepository = new PrismaAgentRunRepository(sessionLifecycleRepository)
   const agentExecutor = new AgentRunExecutor(
     conversationService,
     approvalService,
@@ -42,7 +46,14 @@ export function registerRoutes(app: FastifyInstance) {
     projectService,
     new DefaultAgentRuntime(),
   )
-  const coordinator = new RunCoordinator(conversationService, approvalService, timelineStore, agentExecutor)
+  const coordinator = new RunCoordinator(
+    conversationService,
+    approvalService,
+    timelineStore,
+    agentExecutor,
+    new RunScheduler(sessionLifecycleRepository),
+    new PrismaRunLifecycleRepository(sessionLifecycleRepository),
+  )
   const turnService = new TurnService(conversationService, coordinator, timelineStore, timelineHub)
 
   app.addHook('onReady', async () => coordinator.start())

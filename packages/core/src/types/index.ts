@@ -2,6 +2,7 @@ export type { Session } from './session.js'
 export type {
   Project,
   Conversation,
+  ConversationRuntimeStatus,
 } from './project.js'
 export type { StartTurnResult } from './run.js'
 export type { MessageRole, MessageContent, TextContent, ReasoningContent, ToolSummary, Message } from './message.js'

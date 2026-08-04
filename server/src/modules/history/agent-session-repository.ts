@@ -1,5 +1,9 @@
 import type { AgentInputItem } from '@openai/agents'
 import { prisma } from '../../db/client.js'
+import {
+  PrismaAgentSessionLifecycleRepository,
+  type AgentSessionLifecycleRepository,
+} from './session-lifecycle-repository.js'
 
 export interface AgentSessionRepository {
   getItems(sessionId: string, limit?: number): Promise<AgentInputItem[]>
@@ -10,6 +14,10 @@ export interface AgentSessionRepository {
 }
 
 export class PrismaAgentSessionRepository implements AgentSessionRepository {
+  constructor(
+    private readonly lifecycleRepository: AgentSessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository(),
+  ) {}
+
   async getItems(sessionId: string, limit?: number): Promise<AgentInputItem[]> {
     const items = await prisma.sessionItem.findMany({
       where: { sessionId },
@@ -42,22 +50,29 @@ export class PrismaAgentSessionRepository implements AgentSessionRepository {
           },
         })
       }
+      await this.lifecycleRepository.touch(sessionId, tx)
     })
   }
 
   async popItem(sessionId: string): Promise<AgentInputItem | undefined> {
-    const item = await prisma.sessionItem.findFirst({
-      where: { sessionId },
-      orderBy: { sequence: 'desc' },
-    })
-    if (!item) return undefined
+    return prisma.$transaction(async (tx) => {
+      const item = await tx.sessionItem.findFirst({
+        where: { sessionId },
+        orderBy: { sequence: 'desc' },
+      })
+      if (!item) return undefined
 
-    await prisma.sessionItem.delete({ where: { id: item.id } })
-    return JSON.parse(item.payload) as AgentInputItem
+      await tx.sessionItem.delete({ where: { id: item.id } })
+      await this.lifecycleRepository.touch(sessionId, tx)
+      return JSON.parse(item.payload) as AgentInputItem
+    })
   }
 
   async clearSession(sessionId: string): Promise<void> {
-    await prisma.sessionItem.deleteMany({ where: { sessionId } })
+    await prisma.$transaction(async (tx) => {
+      await tx.sessionItem.deleteMany({ where: { sessionId } })
+      await this.lifecycleRepository.touch(sessionId, tx)
+    })
   }
 
   async replaceItems(sessionId: string, items: AgentInputItem[]): Promise<void> {
@@ -73,6 +88,7 @@ export class PrismaAgentSessionRepository implements AgentSessionRepository {
           },
         })
       }
+      await this.lifecycleRepository.touch(sessionId, tx)
     })
   }
 }

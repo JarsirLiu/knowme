@@ -49,7 +49,7 @@ SQLite 或 HTTP 请求。
 | `chat` | Turn 编排、Agent runtime 适配、流式事件映射、一次 Run 执行 |
 | `runs` | Run 排队、claim、租约、取消、恢复和生命周期状态变更 |
 | `approvals` | 工具审批查询、批准/拒绝和持久化 |
-| `history` | Agent Session 持久化、上下文压缩策略与摘要 |
+| `history` | Agent Session 持久化、Session lifecycle、上下文压缩策略与摘要 |
 | `events` | Timeline 事件原子写入、查询和进程内发布 |
 | `devices` | 当前版本的设备 CRUD 预留接口 |
 

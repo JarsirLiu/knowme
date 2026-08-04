@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Conversation, Project } from '@superagent/core'
-import type { ActiveConversation } from '@/features/chat/hooks/useAgentChat'
+import type { ActiveConversation, ConversationDisplayStatus } from '@/features/chat/hooks/useAgentChat'
 import styles from './Sidebar.module.css'
 
 type SidebarProps = {
@@ -8,7 +8,7 @@ type SidebarProps = {
   conversationsByProject: Record<string, Conversation[]>
   activeProjectId: string
   active: ActiveConversation | null
-  isLoading: boolean
+  conversationStatuses: Record<string, ConversationDisplayStatus>
   mobileOpen: boolean
   onSelectProject: (projectId: string) => void
   onSelectConversation: (conversationId: string, projectId: string) => void
@@ -32,7 +32,7 @@ export function Sidebar({
   conversationsByProject,
   activeProjectId,
   active,
-  isLoading,
+  conversationStatuses,
   mobileOpen,
   onSelectProject,
   onSelectConversation,
@@ -86,7 +86,7 @@ export function Sidebar({
         </svg>
       </div>
 
-      <button className={styles.newButton} type="button" onClick={() => onNew(activeProjectId)} disabled={!activeProjectId || isLoading}>
+      <button className={styles.newButton} type="button" onClick={() => onNew(activeProjectId)} disabled={!activeProjectId}>
         <svg className={styles.newIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M13.5 5.5H6A2 2 0 0 0 4 7.5v10A2 2 0 0 0 6 19.5h10a2 2 0 0 0 2-2V10" />
           <path d="m14 4 6 6M12 14l1.5-4.5L18 8l2 2-1.5 4.5L14 16l-2-2Z" />
@@ -129,7 +129,6 @@ export function Sidebar({
                   className={styles.projectNewButton}
                   type="button"
                   onClick={() => onNew(project.id)}
-                  disabled={isLoading}
                   title={`在 ${project.name} 中新建会话`}
                   aria-label={`在 ${project.name} 中新建会话`}
                 >
@@ -154,14 +153,14 @@ export function Sidebar({
                         onClick={() => onSelectConversation(conversation.id, project.id)}
                         title={conversation.title}
                       >
-                        <span className={`${styles.statusDot} ${isLoading && selected ? styles.statusDotBusy : ''}`} />
+                         <span className={`${styles.statusDot} ${conversationStatuses[conversation.id] === 'queued' || conversationStatuses[conversation.id] === 'running' || conversationStatuses[conversation.id] === 'waiting_approval' ? styles.statusDotBusy : ''}`} />
                         <span className={styles.conversationTitle}>{conversation.title}</span>
                       </button>
                       <button
                         type="button"
                         className={styles.conversationDeleteButton}
                         onClick={() => onDeleteConversation(conversation.id, project.id)}
-                        disabled={isLoading || deletingConversationId !== null}
+                        disabled={deletingConversationId !== null}
                         title="删除会话"
                         aria-label={`删除会话：${conversation.title}`}
                       >
@@ -197,7 +196,6 @@ export function Sidebar({
               className={styles.popoverNewButton}
               type="button"
               onClick={() => onNew(hoveredProject.id)}
-              disabled={isLoading}
               title="新建会话"
               aria-label="新建会话"
             >

@@ -1,6 +1,8 @@
 // Domain types — pure data, no behavior
 // Aligns with @openai/agents SDK lifecycle: in_progress | completed | incomplete
 
+import type { ConversationRuntimeStatus } from '@superagent/core'
+
 export type ToolCallStatus =
   | 'running'
   | 'awaiting_approval'
@@ -80,6 +82,8 @@ export type ChatEntry =
 
 export interface ChatState {
   entries: ChatEntry[]
+  runtimeStatus: ConversationRuntimeStatus
+  requestPending: boolean
   isLoading: boolean
   isCompacting: boolean
   error: string | null

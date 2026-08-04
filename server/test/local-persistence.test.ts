@@ -13,6 +13,8 @@ import { persistCompactionMessage } from '../src/modules/history/session-compact
 import { ProjectService } from '../src/modules/projects/project.service.js'
 import { extractRawStreamDelta } from '../src/modules/chat/turn.service.js'
 import { RunCoordinator } from '../src/modules/runs/run-coordinator.js'
+import { PrismaRunLifecycleRepository } from '../src/modules/runs/run-lifecycle-repository.js'
+import { RunScheduler } from '../src/modules/runs/run-scheduler.js'
 import { TimelineEventHub } from '../src/modules/events/timeline-event-hub.js'
 
 const tempRoot = path.resolve(process.cwd(), '..', '.data', 'temp')
@@ -315,6 +317,132 @@ test('restart marks waiting approval without state as interrupted', async () => 
   assert.equal((await timelineStore.list(turn.conversation.id)).at(-1)?.type, 'run.interrupted')
 })
 
+test('requeues a failed owned run from its SDK checkpoint', async () => {
+  const conversations = new ConversationService(timelineStore)
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'recover from checkpoint',
+    clientMessageId: 'test-checkpoint-recovery-message-1',
+  })
+  const owner = 'checkpoint-test-owner'
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: {
+      status: 'running',
+      state: '{"checkpoint":true}',
+      leaseOwner: owner,
+      leaseExpiresAt: new Date(Date.now() + 30_000),
+    },
+  })
+  await prisma.conversation.update({
+    where: { id: turn.conversation.id },
+    data: { activeRunId: turn.run.id },
+  })
+
+  const requeued = await new PrismaRunLifecycleRepository().requeueFromCheckpoint(
+    turn.run.id,
+    turn.conversation.id,
+    '{"checkpoint":true}',
+    owner,
+  )
+  assert.equal(requeued, true)
+  const recovered = await prisma.agentRun.findUnique({ where: { id: turn.run.id } })
+  assert.equal(recovered?.status, 'queued')
+  assert.equal(recovered?.state, '{"checkpoint":true}')
+  assert.equal(recovered?.leaseOwner, null)
+  assert.equal((await prisma.conversation.findUnique({ where: { id: turn.conversation.id } }))?.activeRunId, null)
+})
+
+test('interrupts checkpointed runs that reached the recovery limit', async () => {
+  const conversations = new ConversationService(timelineStore)
+  const restartTurn = await conversations.startTurn({
+    projectId,
+    message: 'stop repeated restart recovery',
+    clientMessageId: 'test-recovery-limit-restart-1',
+  })
+  await prisma.agentRun.update({
+    where: { id: restartTurn.run.id },
+    data: {
+      status: 'running',
+      attempt: 3,
+      state: '{"checkpoint":true}',
+      leaseOwner: 'old-server',
+      leaseExpiresAt: new Date(Date.now() - 1_000),
+    },
+  })
+  await prisma.conversation.update({ where: { id: restartTurn.conversation.id }, data: { activeRunId: restartTurn.run.id } })
+
+  const coordinator = new RunCoordinator(conversations, new ApprovalService(), timelineStore)
+  await (coordinator as unknown as { recoverAfterRestart: () => Promise<void> }).recoverAfterRestart()
+
+  const restartRecovered = await prisma.agentRun.findUnique({ where: { id: restartTurn.run.id } })
+  assert.equal(restartRecovered?.status, 'interrupted')
+  assert.match(restartRecovered?.error ?? '', /recovery attempt limit/i)
+  assert.equal((await timelineStore.list(restartTurn.conversation.id)).at(-1)?.type, 'run.interrupted')
+
+  const expiredTurn = await conversations.startTurn({
+    projectId,
+    message: 'stop repeated lease recovery',
+    clientMessageId: 'test-recovery-limit-expired-1',
+  })
+  await prisma.agentRun.update({
+    where: { id: expiredTurn.run.id },
+    data: {
+      status: 'running',
+      attempt: 3,
+      state: '{"checkpoint":true}',
+      leaseOwner: 'expired-server',
+      leaseExpiresAt: new Date(Date.now() - 1_000),
+    },
+  })
+  await prisma.conversation.update({ where: { id: expiredTurn.conversation.id }, data: { activeRunId: expiredTurn.run.id } })
+
+  const event = await new PrismaRunLifecycleRepository().recoverExpired(
+    (await prisma.agentRun.findUniqueOrThrow({ where: { id: expiredTurn.run.id } })),
+    3,
+  )
+  if (event) timelineStore.publish(event)
+  const expiredRecovered = await prisma.agentRun.findUnique({ where: { id: expiredTurn.run.id } })
+  assert.equal(expiredRecovered?.status, 'interrupted')
+  assert.match(expiredRecovered?.error ?? '', /recovery attempt limit/i)
+  assert.equal((await timelineStore.list(expiredTurn.conversation.id)).at(-1)?.type, 'run.interrupted')
+})
+
+test('stale recovery snapshots cannot overwrite a newer lease', async () => {
+  const conversations = new ConversationService(timelineStore)
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'protect newer lease',
+    clientMessageId: 'test-stale-recovery-snapshot-1',
+  })
+  const lifecycle = new PrismaRunLifecycleRepository()
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: {
+      status: 'running',
+      state: '{"checkpoint":true}',
+      leaseOwner: 'old-owner',
+      leaseExpiresAt: new Date(Date.now() - 1_000),
+    },
+  })
+  const staleSnapshot = await prisma.agentRun.findUniqueOrThrow({ where: { id: turn.run.id } })
+  await prisma.conversation.update({ where: { id: turn.conversation.id }, data: { activeRunId: turn.run.id } })
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: {
+      leaseOwner: 'new-owner',
+      leaseExpiresAt: new Date(Date.now() + 30_000),
+    },
+  })
+
+  const event = await lifecycle.recoverExpired(staleSnapshot, 3)
+  assert.equal(event, undefined)
+  const current = await prisma.agentRun.findUniqueOrThrow({ where: { id: turn.run.id } })
+  assert.equal(current.status, 'running')
+  assert.equal(current.leaseOwner, 'new-owner')
+  assert.equal((await prisma.conversation.findUnique({ where: { id: turn.conversation.id } }))?.activeRunId, turn.run.id)
+})
+
 test('timeline hub isolates disconnected listeners and cleans subscriptions', () => {
   const hub = new TimelineEventHub()
   let calls = 0
@@ -346,6 +474,15 @@ test('conversation delete archives it without losing persisted history', async (
   const beforeDelete = await conversations.list(projectId)
   assert.ok(beforeDelete.some((conversation) => conversation.id === turn.conversation.id))
 
+  await assert.rejects(
+    conversations.delete(turn.conversation.id),
+    /Conversation has an active run/,
+  )
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: { status: 'cancelled', finishedAt: new Date() },
+  })
+
   const deleted = await conversations.delete(turn.conversation.id)
   assert.equal(deleted.status, 'archived')
 
@@ -368,6 +505,24 @@ test('conversation delete archives it without losing persisted history', async (
     }),
     /Conversation is not active/,
   )
+})
+
+test('scheduler does not claim queued work from an archived conversation', async () => {
+  await prisma.agentRun.updateMany({
+    where: { status: 'queued' },
+    data: { status: 'cancelled', finishedAt: new Date() },
+  })
+  const conversations = new ConversationService(timelineStore)
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'do not run archived work',
+    clientMessageId: 'test-archived-queued-run-1',
+  })
+  await prisma.conversation.update({ where: { id: turn.conversation.id }, data: { status: 'archived' } })
+
+  const claimed = await new RunScheduler().claimNext('archived-test-owner')
+  assert.notEqual(claimed?.id, turn.run.id)
+  assert.equal((await prisma.agentRun.findUnique({ where: { id: turn.run.id } }))?.status, 'queued')
 })
 
 test('HTTP routes validate project input and return the local project list', async () => {

@@ -26,14 +26,16 @@ Device (当前为独立 CRUD 预留模型)
 ### Project 与 Conversation
 
 Project 以唯一 `rootPath` 标识本地工作区。Conversation 记录项目归属、标题、
-Agent profile、activeRunId 和运行序号。删除 Conversation 会级联删除其 Session、
-Message、Run 及相关事件。
+Agent profile、activeRunId 和运行序号。当前删除接口执行归档并保留历史；只有
+底层级联删除 Conversation 时才会一并删除其 Session、Message、Run 及相关事件。
 
 ### AgentSession 与 SessionItem
 
 SessionItem 保存完整的 Agent SDK `AgentInputItem` JSON，而不是只保存 role/content。
 这样工具调用、工具输出和多轮恢复不会被压扁成普通文本。Session repository
-负责按 sequence 读写、追加、弹出、清空和整体替换。
+负责按 sequence 读写、追加、弹出、清空和整体替换；Session 活跃时间由独立的
+Session lifecycle repository 统一维护，并与相关 Run/Conversation 状态写入放在同一
+事务中。
 
 ### AgentRun
 

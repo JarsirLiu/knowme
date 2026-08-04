@@ -16,6 +16,7 @@ type AgentStream = AsyncIterable<RunStreamEvent> & {
   state: PersistedRunState
   interruptions: ApprovalInterruption[]
   finalOutput?: unknown
+  error?: unknown
   completed: Promise<void>
 }
 
@@ -60,31 +61,45 @@ export class AgentRunExecutor {
     const input = await this.loadInput(agent, agentRun.input, agentRun.state)
     const state = input instanceof RunState ? await this.applyApprovals(agentRun.id, conversation.id, input, leaseOwner) : undefined
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
-    const stream = await run(agent, state ?? input, {
-      maxTurns: null,
-      stream: true,
-      session,
-      signal,
-    })
+    let stream: AgentStream | undefined
+    try {
+      stream = await run(agent, state ?? input, {
+        maxTurns: null,
+        stream: true,
+        session,
+        signal,
+      })
 
-    const streamState: StreamEventState = { sawReasoningDelta: false }
-    await this.consumeStream(stream, conversation.id, runId, streamState, leaseOwner)
+      const streamState: StreamEventState = { sawReasoningDelta: false }
+      await this.consumeStream(stream, conversation.id, runId, streamState, leaseOwner)
 
-    const interruptions = stream.interruptions
-    if (interruptions.length > 0) {
-      const waitingEvents = await this.runRepository.waitForApprovals(
-        runId,
-        conversation.id,
-        stream.state.toString(),
-        leaseOwner,
-        interruptions.map(approvalDetails),
-      )
-      for (const event of waitingEvents) this.timelineStore.publish(event)
-      return 'waiting_approval'
+      const interruptions = stream.interruptions
+      if (interruptions.length > 0) {
+        const waitingEvents = await this.runRepository.waitForApprovals(
+          runId,
+          conversation.id,
+          stream.state.toString(),
+          leaseOwner,
+          interruptions.map(approvalDetails),
+        )
+        for (const event of waitingEvents) this.timelineStore.publish(event)
+        return 'waiting_approval'
+      }
+
+      if (isEmptyOutput(stream.finalOutput)) {
+        await this.runRepository.updateStateIfOwned(runId, stream.state.toString(), leaseOwner)
+        throw new Error('Agent run ended without final output')
+      }
+
+      await this.completeRun(agentRun.id, conversation.id, runId, stream, session, leaseOwner)
+      return 'completed'
+    } catch (error) {
+      const errorState = getErrorState(error) ?? stream?.state
+      if (errorState) {
+        await this.runRepository.updateStateIfOwned(runId, errorState.toString(), leaseOwner).catch(() => undefined)
+      }
+      throw error
     }
-
-    await this.completeRun(agentRun.id, conversation.id, runId, stream, session, leaseOwner)
-    return 'completed'
   }
 
   private async applyApprovals(
@@ -128,6 +143,7 @@ export class AgentRunExecutor {
       await this.runRepository.heartbeatIfOwned(runId, leaseOwner)
     }
     await stream.completed
+    if (stream.error) throw stream.error
   }
 
   private async completeRun(
@@ -190,6 +206,18 @@ function stringifyOutput(value: unknown): string {
   if (typeof value === 'string') return value
   if (value == null) return ''
   return JSON.stringify(value)
+}
+
+function isEmptyOutput(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value === 'string') return value.trim() === ''
+  return JSON.stringify(value) === undefined
+}
+
+function getErrorState(error: unknown): PersistedRunState | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const state = (error as { state?: unknown }).state
+  return state instanceof RunState ? state as PersistedRunState : undefined
 }
 
 function getLatestModelUsage(state: unknown): { inputTokens: number; outputTokens: number; totalTokens: number } | undefined {
