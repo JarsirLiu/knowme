@@ -22,6 +22,7 @@ const INITIAL_STATE: ChatState = {
 
 export function useAgentChat(
   target: ActiveConversation | null,
+  activeConversationIds: readonly string[],
   onConversationCreated: (data: { conversationId: string; title: string; draftId: string; projectId: string }) => void,
 ) {
   const [states, setStates] = useState<Record<string, ChatState>>({})
@@ -49,8 +50,9 @@ export function useAgentChat(
   const { subscribeConversation, disposeConversation } = useConversationEventSubscriptions(dispatchFor, clearStateFor)
 
   useEffect(() => {
+    for (const conversationId of activeConversationIds) subscribeConversation(conversationId)
     if (target?.kind === 'persisted') subscribeConversation(target.conversationId)
-  }, [subscribeConversation, target?.kind, target?.kind === 'persisted' ? target.conversationId : undefined])
+  }, [activeConversationIds, subscribeConversation, target?.kind, target?.kind === 'persisted' ? target.conversationId : undefined])
 
   const state = states[targetKey] ?? INITIAL_STATE
 

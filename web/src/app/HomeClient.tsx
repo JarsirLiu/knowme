@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Conversation, Project } from '@superagent/core'
 import { Sidebar } from '@/components/Sidebar/Sidebar'
 import { Header, MessageList, InputBar, useAgentChat } from '@/features/chat'
@@ -29,6 +29,16 @@ export default function HomeClient() {
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null)
   const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
+
+  const activeConversationIds = useMemo(
+    () => Object.values(conversationsByProject)
+      .flat()
+      .filter((conversation) => conversation.runtimeStatus === 'queued'
+        || conversation.runtimeStatus === 'running'
+        || conversation.runtimeStatus === 'waiting_approval')
+      .map((conversation) => conversation.id),
+    [conversationsByProject],
+  )
 
   const handleConversationCreated = useCallback((data: { conversationId: string; title: string; draftId: string; projectId: string }) => {
     setActive((current) => {
@@ -67,7 +77,7 @@ export default function HomeClient() {
     stop,
     disposeConversation,
     statusByConversation,
-  } = useAgentChat(active, handleConversationCreated)
+  } = useAgentChat(active, activeConversationIds, handleConversationCreated)
 
   const persistedConversationStatuses = Object.fromEntries(
     Object.values(conversationsByProject)

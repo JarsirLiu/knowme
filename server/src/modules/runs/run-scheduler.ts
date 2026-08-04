@@ -33,39 +33,43 @@ export class RunScheduler {
           select: { activeRunId: true },
         })
         if (!conversation) return null
+        let activeRunId = conversation.activeRunId
 
-        if (conversation.activeRunId === candidate.id) {
+        if (activeRunId === candidate.id) {
           const currentCandidate = await tx.agentRun.findUnique({
             where: { id: candidate.id },
             select: { status: true },
           })
           if (currentCandidate && ACTIVE_STATUSES.includes(currentCandidate.status)) return null
           if (!currentCandidate || currentCandidate.status !== 'queued') {
-            await tx.conversation.updateMany({
+            const released = await tx.conversation.updateMany({
               where: { id: candidate.conversationId, activeRunId: candidate.id },
               data: { activeRunId: null },
             })
+            if (released.count === 1) activeRunId = null
           }
         }
 
-        if (conversation.activeRunId && conversation.activeRunId !== candidate.id) {
+        if (activeRunId && activeRunId !== candidate.id) {
           const activeRun = await tx.agentRun.findUnique({
-            where: { id: conversation.activeRunId },
+            where: { id: activeRunId },
             select: { status: true },
           })
           if (activeRun && ACTIVE_STATUSES.includes(activeRun.status)) return null
-          await tx.conversation.updateMany({
-            where: { id: candidate.conversationId, activeRunId: conversation.activeRunId },
+          const released = await tx.conversation.updateMany({
+            where: { id: candidate.conversationId, activeRunId },
             data: { activeRunId: null },
           })
+          if (released.count === 1) activeRunId = null
         }
 
-        if (conversation.activeRunId !== candidate.id) {
+        if (activeRunId !== candidate.id) {
           const reserved = await tx.conversation.updateMany({
             where: { id: candidate.conversationId, status: 'active', activeRunId: null },
             data: { activeRunId: candidate.id },
           })
           if (reserved.count !== 1) return null
+          activeRunId = candidate.id
         }
 
         const active = await tx.agentRun.findFirst({

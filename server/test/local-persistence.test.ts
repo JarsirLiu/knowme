@@ -525,6 +525,32 @@ test('scheduler does not claim queued work from an archived conversation', async
   assert.equal((await prisma.agentRun.findUnique({ where: { id: turn.run.id } }))?.status, 'queued')
 })
 
+test('scheduler repairs a stale candidate active-run pointer before claiming', async () => {
+  await prisma.agentRun.updateMany({
+    where: { status: 'queued' },
+    data: { status: 'cancelled', finishedAt: new Date() },
+  })
+  const conversations = new ConversationService(timelineStore)
+  const turn = await conversations.startTurn({
+    projectId,
+    message: 'repair stale active run pointer',
+    clientMessageId: 'test-stale-active-run-pointer-1',
+  })
+  await prisma.conversation.update({
+    where: { id: turn.conversation.id },
+    data: { activeRunId: turn.run.id },
+  })
+  await prisma.agentRun.update({
+    where: { id: turn.run.id },
+    data: { status: 'queued', finishedAt: null },
+  })
+
+  const claimed = await new RunScheduler().claimNext('stale-pointer-test-owner')
+  assert.equal(claimed?.id, turn.run.id)
+  assert.equal((await prisma.agentRun.findUnique({ where: { id: turn.run.id } }))?.status, 'running')
+  assert.equal((await prisma.conversation.findUnique({ where: { id: turn.conversation.id } }))?.activeRunId, turn.run.id)
+})
+
 test('HTTP routes validate project input and return the local project list', async () => {
   const nestedDirectory = path.join(workspace, 'nested-directory')
   fs.mkdirSync(nestedDirectory)
