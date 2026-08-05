@@ -4,7 +4,7 @@ import { aisdk } from '@openai/agents-extensions/ai-sdk'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { loadConfig } from './config.js'
 import { createReadOnlyTools, createReviewTools, createTools } from './tools/index.js'
-import { getExplorerInstructions, getInstructions, getReviewerInstructions } from './instructions.js'
+import { getInstructions, getExplorerInstructions, getReviewerInstructions } from './instructions.js'
 
 export interface CodingAgent {
   agent: Agent
@@ -27,19 +27,19 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
   const explorerAgent = new Agent({
     name: 'Project Explorer',
     model,
-    instructions: getExplorerInstructions(cfg.workspace),
+    instructions: getExplorerInstructions(),
     tools: createReadOnlyTools(cfg.workspace),
   })
 
   const reviewerAgent = new Agent({
     name: 'Code Reviewer',
     model,
-    instructions: getReviewerInstructions(cfg.workspace),
+    instructions: getReviewerInstructions(),
     tools: createReviewTools(cfg.workspace),
   })
 
   const tools = createTools(cfg)
-  const instructions = getInstructions(cfg.workspace)
+  const instructions = getInstructions()
 
   const agent = new Agent({
     name: 'SuperAgent',

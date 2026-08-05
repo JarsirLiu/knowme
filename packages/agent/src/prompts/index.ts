@@ -1,2 +1,5 @@
 export { composePrompt, registerFragment, getFragment } from './compose.js'
 export type { PromptConfig, PromptFragment } from './types.js'
+export { mainAgentPrompt } from './templates/main-agent.js'
+export { explorerPrompt } from './templates/explorer.js'
+export { reviewerPrompt } from './templates/reviewer.js'
