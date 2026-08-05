@@ -1,4 +1,5 @@
 import { Agent, setTracingDisabled } from '@openai/agents'
+import type { Tool } from '@openai/agents'
 import { aisdk } from '@openai/agents-extensions/ai-sdk'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { loadConfig } from './config.js'
