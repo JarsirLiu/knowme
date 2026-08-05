@@ -121,6 +121,7 @@ export class PrismaRunLifecycleRepository {
         data: {
           status,
           error: message,
+          state: null,
           finishedAt: new Date(),
           leaseOwner: null,
           leaseExpiresAt: null,

@@ -1,12 +1,13 @@
 // ApprovalBar — shows approval UI for a tool call awaiting approval
 
+import { useState } from 'react'
 import type { ToolCall } from '../types'
 import styles from './ApprovalBar.module.css'
 
 interface ApprovalBarProps {
   toolCall: ToolCall
-  onApprove: (callId: string) => void
-  onDeny: (callId: string) => void
+  onApprove: (callId: string) => void | Promise<void>
+  onDeny: (callId: string) => void | Promise<void>
 }
 
 function hasDisplayableArgs(args: unknown): boolean {
@@ -14,6 +15,18 @@ function hasDisplayableArgs(args: unknown): boolean {
 }
 
 export function ApprovalBar({ toolCall, onApprove, onDeny }: ApprovalBarProps) {
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit(decision: 'approve' | 'deny') {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      await (decision === 'approve' ? onApprove(toolCall.id) : onDeny(toolCall.id))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className={styles.banner}>
       <div className={styles.header}>
@@ -38,14 +51,16 @@ export function ApprovalBar({ toolCall, onApprove, onDeny }: ApprovalBarProps) {
         <button
           type="button"
           className={styles.approveBtn}
-          onClick={() => onApprove(toolCall.id)}
+          disabled={submitting}
+          onClick={() => void submit('approve')}
         >
           允许
         </button>
         <button
           type="button"
           className={styles.denyBtn}
-          onClick={() => onDeny(toolCall.id)}
+          disabled={submitting}
+          onClick={() => void submit('deny')}
         >
           拒绝
         </button>

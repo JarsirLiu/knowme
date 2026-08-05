@@ -51,6 +51,9 @@ waiting_approval）时返回 HTTP 409，调用方应等待收尾或先取消 Run
 
 设备接口目前只是本地 CRUD，不代表已经实现 Device Mesh、Hub 路由或远程执行。
 
+审批决议按 `conversationId + toolCallId` 定位，并对重复提交保持幂等：已经解决的审批
+再次提交不会因为竞态返回“已解决”错误；完全不存在的审批仍返回 HTTP 404。
+
 ## API 修改规则
 
 - 修改路径、body、响应字段或 SSE 事件时，同时更新 `packages/core` 类型、

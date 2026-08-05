@@ -8,10 +8,10 @@ export class LocalShell implements Shell {
     this.workspace = workspace
   }
 
-  async run(action: ShellAction): Promise<ShellResult> {
+  async run(action: ShellAction, signal?: AbortSignal): Promise<ShellResult> {
     const output: ShellOutputResult[] = []
     for (const cmd of action.commands) {
-      const result = await this.execCommand(cmd, action.timeoutMs, action.maxOutputLength)
+      const result = await this.execCommand(cmd, action.timeoutMs, action.maxOutputLength, signal)
       output.push(result)
     }
     return { output, maxOutputLength: action.maxOutputLength }
@@ -21,6 +21,7 @@ export class LocalShell implements Shell {
     command: string,
     timeoutMs?: number,
     maxOutputLength?: number,
+    signal?: AbortSignal,
   ): Promise<ShellOutputResult> {
     return new Promise((resolve) => {
       const child = execFile(
@@ -29,13 +30,14 @@ export class LocalShell implements Shell {
         {
           cwd: this.workspace,
           timeout: timeoutMs ?? 120_000,
+          signal,
           windowsHide: true,
           maxBuffer: 10 * 1024 * 1024,
         },
         (err, stdout, stderr) => {
           const maxLen = maxOutputLength ?? 8000
           const resolveOutput = (): ShellOutputResult => {
-            if (err?.code === undefined && err?.signal === 'SIGTERM') {
+            if (err?.signal === 'SIGTERM' || err?.name === 'AbortError' || err?.code === 'ABORT_ERR') {
               return { stdout: stdout.slice(0, maxLen), stderr: stderr.slice(0, maxLen), outcome: { type: 'timeout' } }
             }
             return {

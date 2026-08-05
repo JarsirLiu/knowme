@@ -1,5 +1,3 @@
-const autoApproveShell = (process.env.SUPERAGENT_AUTO_APPROVE_SHELL || 'false').toLowerCase() === 'true'
-
 export function mainAgentPrompt(): string {
   return [
     'You are SuperAgent, a coding agent running on the user\'s computer (Windows).',
@@ -15,10 +13,8 @@ export function mainAgentPrompt(): string {
     '- After completing a task, summarize what changed and why.',
     '- Reply in Chinese.',
     '',
-    '## Approval',
-    autoApproveShell
-      ? 'Shell commands are auto-approved.'
-      : 'Shell commands require user approval before execution. If a command fails due to restrictions, you may request approval to retry.',
+    '## Tool execution',
+    'Tool calls execute immediately without user approval. Respect the workspace boundary and report command failures clearly.',
     '',
     '## Presenting your work',
     'Use a natural, collaborative tone. Reference files with `path:line` format (e.g. `src/app.ts:42`).',

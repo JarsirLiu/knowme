@@ -34,9 +34,13 @@ queued -> running -> completed
                  -> waiting_approval -> queued
 ```
 
-`waiting_approval` 会保存 Agent state 和待审批工具调用；所有审批解决后，协调器
-把 Run 重新放回 `queued`。没有可恢复 state 的运行在重启或租约失效时会进入
+`waiting_approval` 仍是持久化状态，但当前内置工具均不声明审批需求，因此正常工具调用
+不会进入该状态。审批服务、接口和恢复逻辑暂时保留，供未来重新启用细粒度策略。
+没有可恢复 state 的运行在重启或租约失效时会进入
 `interrupted`，而不是假装可以安全续跑。
+
+模型请求使用 `SUPERAGENT_MODEL_TIMEOUT_MS` 控制超时，默认 120 秒；超时会进入既有的
+Run 错误收尾路径，不会无限保持 `running`。
 
 ## Coordinator 与 Executor
 
@@ -89,9 +93,9 @@ Session 本身跨 Run 保持打开，不在单轮执行结束时销毁。
 Conversation API 同时返回由 Run 状态聚合出的 `runtimeStatus`，前端历史 hydration
 以该状态恢复 loading 和 Sidebar 状态，而不是从 Timeline 最后一条事件猜测。
 
-## 审批恢复
+## 审批恢复（暂未由内置工具触发）
 
-需要审批的工具调用会在同一数据库事务中：
+如果未来工具重新声明需要审批，工具调用会在同一数据库事务中：
 
 1. 将 Run 从 `running` 改为 `waiting_approval`。
 2. 保存可恢复的 Agent state。

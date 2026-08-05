@@ -256,6 +256,7 @@ test('approval decisions are persisted durably for coordinator recovery', async 
   })
 
   assert.equal(await approvals.approve(run.conversationId, toolCallId), true)
+  assert.equal(await approvals.approve(run.conversationId, toolCallId), true)
   assert.equal((await prisma.approval.findUnique({ where: { toolCallId } }))?.status, 'approved')
   assert.equal((await approvals.getPendingForRun(run.id)).length, 0)
 })

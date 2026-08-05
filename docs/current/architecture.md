@@ -30,8 +30,9 @@ React Web
 ### `packages/agent`
 
 `createCodingAgent` 负责创建模型、Agent、Explorer/Reviewer 子 Agent 和本地
-工具集合。工具以 workspace 为安全边界。该包不应该知道 Conversation、AgentRun、
-SQLite 或 HTTP 请求。
+工具集合。当前模型通过 `@openai/agents-extensions/ai-sdk` 包装 AI SDK 的
+Chat Completions provider，并使用配置的 `baseURL` 连接兼容端点。工具以 workspace
+为安全边界。该包不应该知道 Conversation、AgentRun、SQLite 或 HTTP 请求。
 
 ### `packages/client`
 

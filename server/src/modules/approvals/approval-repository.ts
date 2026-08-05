@@ -34,16 +34,24 @@ export class PrismaApprovalRepository implements ApprovalRepository {
     const approval = await prisma.approval.findFirst({
       where: { toolCallId, run: { conversationId }, status: 'pending' },
     })
-    if (!approval) return false
-    await prisma.approval.update({
-      where: { id: approval.id },
-      data: {
-        status: approved ? 'approved' : 'denied',
-        decision: approved ? 'approve' : 'deny',
-        resolvedAt: new Date(),
-      },
-    })
-    return true
+    if (approval) {
+      const updated = await prisma.approval.updateMany({
+        where: { id: approval.id, status: 'pending' },
+        data: {
+          status: approved ? 'approved' : 'denied',
+          decision: approved ? 'approve' : 'deny',
+          resolvedAt: new Date(),
+        },
+      })
+      if (updated.count === 1) return true
+    }
+
+    // Approval buttons can be submitted more than once while the SSE stream
+    // is catching up. Resolving an already-resolved approval is idempotent.
+    return Boolean(await prisma.approval.findFirst({
+      where: { toolCallId, run: { conversationId }, status: { in: ['approved', 'denied'] } },
+      select: { id: true },
+    }))
   }
 
   listPending(runId: string) {

@@ -6,9 +6,29 @@ import { loadConfig } from './config.js'
 import { createReadOnlyTools, createReviewTools, createTools } from './tools/index.js'
 import { getInstructions, getExplorerInstructions, getReviewerInstructions } from './instructions.js'
 
+
 export interface CodingAgent {
   agent: Agent
   cfg: ReturnType<typeof loadConfig>
+}
+
+function createTimedFetch(timeoutMs: number): typeof fetch {
+  return async (input, init) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(new Error('Model request timed out')), timeoutMs)
+    const upstreamSignal = init?.signal
+    const abort = () => controller.abort(upstreamSignal?.reason)
+
+    if (upstreamSignal?.aborted) abort()
+    else upstreamSignal?.addEventListener('abort', abort, { once: true })
+
+    try {
+      return await fetch(input, { ...init, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+      upstreamSignal?.removeEventListener('abort', abort)
+    }
+  }
 }
 
 export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfig>> = {}): CodingAgent {
@@ -17,9 +37,10 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
   setTracingDisabled(true)
 
   const provider = createOpenAICompatible({
-    name: cfg.model,
+    name: 'superagent-compatible',
     baseURL: cfg.baseURL,
     apiKey: cfg.apiKey,
+    fetch: createTimedFetch(cfg.modelTimeoutMs),
   })
 
   const model = aisdk(provider.chatModel(cfg.model))

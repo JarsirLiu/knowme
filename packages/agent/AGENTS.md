@@ -18,7 +18,7 @@ server modules.
 ## Tool Security
 
 - All file operations must be explicitly bound to the workspace.
-- Shell tools must enforce approval, timeout, cancellation, and output limits.
+- Shell tools must enforce workspace boundaries, timeout, cancellation, and output limits. Tool approval is currently disabled and reserved for a future fine-grained policy.
 - Tool errors should be diagnostic without exposing secrets.
 - When changing tool schemas, instructions, or provider configuration, verify
   that server recovery and Timeline mapping remain compatible.

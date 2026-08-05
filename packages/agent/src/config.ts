@@ -3,7 +3,7 @@ export interface AppConfig {
   apiKey: string
   model: string
   workspace: string
-  autoApproveShell: boolean
+  modelTimeoutMs: number
 }
 
 function getRequired(...names: string[]): string {
@@ -16,13 +16,17 @@ function getRequired(...names: string[]): string {
   )
 }
 
+function getPositiveInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
+}
+
 export function loadConfig(): AppConfig {
   const baseURL = getRequired('SUPERAGENT_BASE_URL', 'OPENAI_BASE_URL')
   const apiKey = getRequired('SUPERAGENT_API_KEY', 'OPENAI_API_KEY')
   const model = getRequired('SUPERAGENT_MODEL', 'OPENAI_MODEL')
   const workspace =
     process.env.SUPERAGENT_WORKSPACE || process.env.WORKSPACE || process.cwd()
-  const autoApproveShell =
-    (process.env.SUPERAGENT_AUTO_APPROVE_SHELL || 'false').toLowerCase() === 'true'
-  return { baseURL, apiKey, model, workspace, autoApproveShell }
+  const modelTimeoutMs = getPositiveInteger('SUPERAGENT_MODEL_TIMEOUT_MS', 120_000)
+  return { baseURL, apiKey, model, workspace, modelTimeoutMs }
 }

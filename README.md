@@ -54,11 +54,9 @@ pnpm run test:server
 pnpm run build
 ```
 
-默认执行 `run_command` 需要在界面中审批。如需自动批准 Shell 命令，在 `.env` 中设置：
+当前工具调用默认直接执行，不需要界面审批。Shell 仍受工作区边界、超时、取消和输出长度限制。
 
-```dotenv
-SUPERAGENT_AUTO_APPROVE_SHELL=true
-```
+模型请求默认超时为 120 秒，可通过 `SUPERAGENT_MODEL_TIMEOUT_MS` 调整；超时后当前 Run 会明确失败，不会永久保持运行中。
 
 上下文自动压缩默认开启，按模型上下文 token 预算触发。默认上下文窗口为 64000 token，预留 16000 token 输出空间和 1024 token 安全余量，达到 90% 后压缩，并保留最近约 20000 token。兼容模型没有统一 tokenizer，因此这里使用保守估算；请按实际模型调整：
 

@@ -123,7 +123,8 @@ export class RunCoordinator {
       const current = await this.lifecycleRepository.get(runId)
       if (!current || current.status !== 'running' || current.leaseOwner !== this.owner) return
       const cancelled = !this.stopping && (controller.signal.aborted || Boolean(current.cancelRequestedAt))
-      if (!cancelled && current.state && current.attempt < MAX_RECOVERY_ATTEMPTS) {
+      const retryable = !(error instanceof Error && 'retryable' in error && (error as { retryable?: unknown }).retryable === false)
+      if (!cancelled && retryable && current.state && current.attempt < MAX_RECOVERY_ATTEMPTS) {
         await this.retryFromCheckpoint(current, current.state)
         return
       }

@@ -4,7 +4,7 @@ import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import type { Session } from '@openai/agents'
 import { estimateTokens } from '../history/session-compaction.js'
-import { persistRunStreamEvent, type StreamEventState } from './stream-event-mapper.js'
+import { getToolCallId, persistRunStreamEvent, type StreamEventState } from './stream-event-mapper.js'
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
 import { PrismaAgentRunRepository, type AgentRunRepository } from '../runs/agent-run-repository.js'
 import { ProjectService } from '../projects/project.service.js'
@@ -87,14 +87,17 @@ export class AgentRunExecutor {
       }
 
       if (isEmptyOutput(stream.finalOutput)) {
-        await this.runRepository.updateStateIfOwned(runId, stream.state.toString(), leaseOwner)
-        throw new Error('Agent run ended without final output')
+        // The SDK has already reached its terminal final-output step. This
+        // state cannot be resumed: persisting it would make the coordinator
+        // replay the same empty result until the recovery limit is reached.
+        throw new EmptyFinalOutputError()
       }
 
       await this.completeRun(agentRun.id, conversation.id, runId, stream, session, leaseOwner)
       return 'completed'
     } catch (error) {
-      const errorState = getErrorState(error) ?? stream?.state
+      const nonRetryable = error instanceof Error && 'retryable' in error && (error as { retryable?: unknown }).retryable === false
+      const errorState = nonRetryable ? undefined : getErrorState(error) ?? stream?.state
       if (errorState) {
         await this.runRepository.updateStateIfOwned(runId, errorState.toString(), leaseOwner).catch(() => undefined)
       }
@@ -192,9 +195,18 @@ function approvalDetails(interruption: { rawItem?: unknown }) {
     try { args = JSON.parse(rawArguments) } catch { args = rawArguments }
   }
   return {
-    toolCallId: String(raw.callId ?? raw.id ?? 'unknown'),
+    toolCallId: getToolCallId(raw),
     toolName: String(raw.name ?? 'unknown'),
     arguments: args,
+  }
+}
+
+export class EmptyFinalOutputError extends Error {
+  readonly retryable = false
+
+  constructor() {
+    super('Model returned an empty final output')
+    this.name = 'EmptyFinalOutputError'
   }
 }
 

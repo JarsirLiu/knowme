@@ -30,7 +30,7 @@ export async function persistRunStreamEvent(
   const raw = asRecord(item.rawItem) ?? {}
 
   if (event.name === 'tool_called' && item.type === 'tool_call_item') {
-    const id = String(raw.callId ?? raw.id ?? 'unknown')
+    const id = getToolCallId(raw)
       await append(store, conversationId, runId, 'tool.called', {
         messageId: runId,
         toolCallId: id,
@@ -46,7 +46,7 @@ export async function persistRunStreamEvent(
 
   if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
     await append(store, conversationId, runId, 'tool.output', {
-      toolCallId: String(raw.callId ?? raw.id ?? 'unknown'),
+      toolCallId: getToolCallId(raw),
       result: raw.output,
     }, leaseOwner)
   }
@@ -60,6 +60,13 @@ export async function persistRunStreamEvent(
       }, leaseOwner)
     }
   }
+}
+
+export function getToolCallId(raw: Record<string, unknown>): string {
+  for (const key of ['callId', 'call_id', 'toolCallId', 'tool_call_id', 'id']) {
+    if (typeof raw[key] === 'string' && raw[key]) return raw[key] as string
+  }
+  return 'unknown'
 }
 
 export function extractRawStreamDelta(event: RunStreamEvent, fallbackMessageId: string): TimelineDelta | null {
