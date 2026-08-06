@@ -10,8 +10,11 @@ import { TimelineEventStore } from './events/timeline-event-store.js'
 import { ProjectService } from './projects/project.service.js'
 import { PrismaProjectRepository } from './projects/project-repository.js'
 import { ProjectPathValidator } from './projects/project-path-validator.js'
-import { DirectoryService } from './projects/directory.service.js'
 import { registerProjectRoutes } from './projects/project.routes.js'
+import { DirectoryService } from './directory/directory.service.js'
+import { registerDirectoryRoutes } from './directory/directory.routes.js'
+import { WindowsPlatform } from './directory/platforms/windows.js'
+import { UnixPlatform } from './directory/platforms/unix.js'
 import { RunCoordinator } from './runs/run-coordinator.js'
 import { PrismaAgentRunRepository } from './runs/agent-run-repository.js'
 import { AgentRunExecutor } from './chat/agent-run-executor.js'
@@ -26,7 +29,8 @@ import { PrismaRunLifecycleRepository } from './runs/run-lifecycle-repository.js
 
 export function registerRoutes(app: FastifyInstance) {
   const projectService = new ProjectService(new PrismaProjectRepository(), new ProjectPathValidator())
-  const directoryService = new DirectoryService()
+  const platform = process.platform === 'win32' ? new WindowsPlatform() : new UnixPlatform()
+  const directoryService = new DirectoryService(platform)
   const timelineHub = new TimelineEventHub()
   const timelineStore = new TimelineEventStore(timelineHub)
   const sessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository()
@@ -59,7 +63,8 @@ export function registerRoutes(app: FastifyInstance) {
   app.addHook('onReady', async () => coordinator.start())
   app.addHook('onClose', async () => coordinator.stop())
 
-  registerProjectRoutes(app, projectService, directoryService, conversationService, turnService)
+  registerDirectoryRoutes(app, directoryService)
+  registerProjectRoutes(app, projectService, conversationService, turnService)
   registerConversationRoutes(app, conversationService, turnService)
   registerApprovalRoutes(app, approvalService, coordinator)
   registerDeviceRoutes(app, deviceService)
