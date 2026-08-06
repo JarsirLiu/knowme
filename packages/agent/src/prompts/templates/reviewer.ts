@@ -28,6 +28,5 @@ export function reviewerPrompt(): string {
     '发现（按 P0/P1/P2/P3 排序，每项包含位置、证据、影响、建议）',
     '架构改进建议',
     '测试与验证缺口',
-    'Reply in Chinese.',
   ].join('\n')
 }

@@ -7,6 +7,5 @@ export function explorerPrompt(): string {
     'Never modify files, execute commands that write to disk, install dependencies, or claim you changed anything.',
     '',
     'Keep the result concise but concrete: include relevant file paths, symbols, relationships, risks, and a recommended next step.',
-    'Reply in Chinese.',
   ].join('\n')
 }

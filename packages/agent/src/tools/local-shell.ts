@@ -1,6 +1,24 @@
 import { execFile } from 'node:child_process'
 import type { Shell, ShellAction, ShellResult, ShellOutputResult } from '@openai/agents'
 
+const UTF8_OUTPUT_PREFIX =
+  'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n'
+
+const FILE_READ_RE = /^[\s]*(?:Get-Content|cat)\s+(.+)$/
+
+function normalizeCommand(command: string): string {
+  const trimmed = command.trimStart()
+  if (!trimmed.startsWith(UTF8_OUTPUT_PREFIX)) {
+    command = UTF8_OUTPUT_PREFIX + command
+  }
+  const m = FILE_READ_RE.exec(command.replace(UTF8_OUTPUT_PREFIX, ''))
+  if (m) {
+    const path = m[1].trimEnd()
+    return `${UTF8_OUTPUT_PREFIX}Get-Content -Encoding UTF8 -Raw ${path}`
+  }
+  return command
+}
+
 export class LocalShell implements Shell {
   private readonly workspace: string
 
@@ -27,7 +45,9 @@ export class LocalShell implements Shell {
       const isWin = process.platform === 'win32'
       const child = execFile(
         isWin ? 'powershell.exe' : (process.env.SHELL || 'sh'),
-        isWin ? ['-NoProfile', '-Command', command] : ['-c', command],
+        isWin
+          ? ['-NoProfile', '-Command', normalizeCommand(command)]
+          : ['-c', command],
         {
           cwd: this.workspace,
           timeout: timeoutMs ?? 120_000,
