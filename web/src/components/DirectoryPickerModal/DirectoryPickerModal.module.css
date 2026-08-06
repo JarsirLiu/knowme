@@ -1,39 +1,53 @@
 .overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px; background: rgba(23, 29, 36, .22); }
-.modal { width: min(100%, 462px); max-height: min(590px, calc(100vh - 40px)); display: flex; flex-direction: column; border: 1px solid #e4e5e7; border-radius: 12px; background: #fff; box-shadow: 0 20px 45px rgba(27, 36, 44, .16); overflow: hidden; animation: modalIn .14s ease-out; }
-.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 12px; border-bottom: 1px solid #edf0f2; }
+.modal { width: min(100%, 540px); max-height: min(600px, calc(100vh - 40px)); display: flex; flex-direction: column; border: 1px solid #e4e5e7; border-radius: 12px; background: #fff; box-shadow: 0 20px 45px rgba(27, 36, 44, .16); overflow: hidden; animation: modalIn .14s ease-out; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 12px; border-bottom: 1px solid #edf0f2; }
 .header h2 { color: #20252a; font-size: 15px; line-height: 1.2; font-weight: 650; }
-.closeButton, .iconButton { display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #858d94; cursor: pointer; }
-.closeButton { width: 24px; height: 24px; }
-.closeButton:hover, .iconButton:hover:not(:disabled) { background: #f1f3f4; color: #252a2f; }
-.toolbar { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 10px 12px; border-bottom: 1px solid #edf0f2; }
-.iconButton { flex: 0 0 auto; width: 26px; height: 26px; }
-.iconButton:disabled { cursor: default; opacity: .35; }
-.homeButton { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #58636c; font: inherit; font-size: 12px; cursor: pointer; }
-.homeButton:hover:not(:disabled) { background: #f1f3f4; color: #252a2f; }
-.homeButton:disabled { cursor: default; opacity: .45; }
-.path { min-width: 0; overflow: hidden; color: #858d94; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.driveBar { display: flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 12px; border-bottom: 1px solid #edf0f2; color: #858d94; overflow-x: auto; }
-.driveButton { height: 25px; padding: 0 7px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #58636c; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.driveButton:hover:not(:disabled), .driveButtonActive { border-color: #d9e0e5; background: #f3f5f6; color: #20252a; }
-.driveButton:disabled { cursor: wait; opacity: .6; }
+.closeButton { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #858d94; cursor: pointer; }
+.closeButton:hover { background: #f1f3f4; color: #252a2f; }
+
+.navBar { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 10px 18px; border-bottom: 1px solid #edf0f2; }
+.navButton { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #58636c; cursor: pointer; }
+.navButton:hover:not(:disabled) { background: #f1f3f4; color: #252a2f; }
+.navButton:disabled { cursor: default; opacity: .35; }
+.breadcrumb { flex: 1; min-width: 0; display: flex; align-items: center; overflow: hidden; }
+.breadcrumbGroup { display: flex; align-items: center; }
+.breadcrumbSeparator { color: #b0b8be; flex: 0 0 auto; margin: 0 2px; }
+.breadcrumbLabel { color: #20252a; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumbLink { display: inline-block; padding: 2px 4px; border: 0; border-radius: 4px; background: transparent; color: #1d5e9f; font: inherit; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+.breadcrumbLink:hover:not(:disabled) { background: #f3f5f6; }
+.breadcrumbLink:disabled { cursor: wait; opacity: .5; }
+
+.driveBar { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 18px; border-bottom: 1px solid #edf0f2; }
+.driveBarLabel { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; color: #58636c; font-size: 12px; font-weight: 500; }
+.driveTiles { display: flex; gap: 8px; overflow-x: auto; flex: 1; }
+.driveTile { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; min-width: 64px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: #f8f9fa; color: #30363b; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.driveTile:hover:not(:disabled) { background: #f1f3f5; border-color: #d9e0e5; }
+.driveTileActive { background: #e8f1fb; border-color: #b8d4f0; color: #1d5e9f; }
+.driveTileActive svg { color: #3984c6; }
+.driveTile svg { color: #8b949a; }
+.driveTile:disabled { cursor: wait; opacity: .5; }
+
 .list { position: relative; min-height: 220px; flex: 1; overflow: auto; padding: 6px; }
-.entry { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: #30363b; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.entry { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #30363b; text-align: left; font: inherit; font-size: 13px; cursor: pointer; transition: background .1s, color .1s; }
 .entry:hover { background: #f3f5f6; }
 .entrySelected, .entrySelected:hover { background: #e8f1fb; color: #1d5e9f; }
 .entry:disabled { cursor: wait; }
 .entry svg { flex: 0 0 auto; color: #8b949a; }
 .entrySelected svg { color: #3984c6; }
 .entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .state, .stateError { display: flex; align-items: center; justify-content: center; min-height: 180px; padding: 20px; color: #858d94; font-size: 12px; text-align: center; }
 .stateError { color: #b42318; }
 .loadingOverlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255, 255, 255, .58); color: #59656d; pointer-events: all; }
 .spinner { animation: spin .8s linear infinite; }
-.footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding: 10px 12px; border-top: 1px solid #edf0f2; }
-.cancelButton, .selectButton { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+
+.footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid #edf0f2; }
+.cancelButton, .selectButton { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; transition: background .1s, color .1s; }
 .cancelButton { border: 0; background: transparent; color: #7e868d; }
 .cancelButton:hover { background: #f2f4f5; color: #30363b; }
-.selectButton { border: 1px solid #1c2024; background: #1c2024; color: #fff; font-weight: 650; }
+.selectButton { border: 1px solid #1c2024; background: #1c2024; color: #fff; font-weight: 600; }
 .selectButton:hover:not(:disabled) { background: #31373c; }
 .selectButton:disabled { cursor: not-allowed; opacity: .38; }
+
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes modalIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0);} }

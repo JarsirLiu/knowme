@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronLeft, Folder, HardDrive, Home, LoaderCircle, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronLeft, ChevronRight, Folder, HardDrive, Home, LoaderCircle, X } from 'lucide-react'
 import type { DirectoryListing } from '@superagent/core'
 import { client } from '@/api/client'
 import styles from './DirectoryPickerModal.module.css'
@@ -8,6 +8,29 @@ type DirectoryPickerModalProps = {
   open: boolean
   onClose: () => void
   onSelect: (directory: string) => void
+}
+
+function getBreadcrumbItems(currentPath: string): Array<{ label: string; path: string }> {
+  const parts = currentPath.split(/[/\\]/).filter(Boolean)
+  if (parts.length === 0) return []
+
+  const isWindows = parts[0].endsWith(':')
+  const sep = isWindows ? '\\' : '/'
+  const items: Array<{ label: string; path: string }> = []
+
+  if (isWindows) {
+    items.push({ label: parts[0], path: parts[0] + sep })
+  } else {
+    items.push({ label: '根目录', path: sep })
+  }
+
+  let built = parts[0].includes(':') ? parts[0] : ''
+  for (let i = 1; i < parts.length; i++) {
+    built += sep + parts[i]
+    items.push({ label: parts[i], path: built })
+  }
+
+  return items
 }
 
 export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPickerModalProps) {
@@ -48,6 +71,11 @@ export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPicke
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose, open])
 
+  const breadcrumbItems = useMemo(
+    () => listing ? getBreadcrumbItems(listing.currentPath) : [],
+    [listing]
+  )
+
   if (!open) return null
 
   return (
@@ -62,41 +90,75 @@ export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPicke
           </button>
         </header>
 
-        <div className={styles.toolbar}>
+        <div className={styles.navBar}>
           <button
-            className={styles.iconButton}
+            className={styles.navButton}
             type="button"
             onClick={() => void load(listing?.parentPath ?? undefined)}
             disabled={!listing?.parentPath || loading}
             aria-label="返回上一级"
             title="返回上一级"
           >
-            <ChevronLeft size={16} aria-hidden="true" />
+            <ChevronLeft size={14} aria-hidden="true" />
           </button>
-          <button className={styles.homeButton} type="button" onClick={() => void load()} disabled={loading}>
+          <div className={styles.breadcrumb}>
+            {breadcrumbItems.map((item, index) => {
+              const isLast = index === breadcrumbItems.length - 1
+              return (
+                <span className={styles.breadcrumbGroup} key={item.path}>
+                  {index > 0 && <ChevronRight className={styles.breadcrumbSeparator} size={12} />}
+                  {isLast ? (
+                    <span className={styles.breadcrumbLabel}>{item.label}</span>
+                  ) : (
+                    <button
+                      className={styles.breadcrumbLink}
+                      type="button"
+                      onClick={() => void load(item.path)}
+                      disabled={loading}
+                    >
+                      {item.label}
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+            {!listing && loading && <span className={styles.breadcrumbLabel}>正在读取…</span>}
+          </div>
+          <button
+            className={styles.navButton}
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            aria-label="主目录"
+            title="主目录"
+          >
             <Home size={14} aria-hidden="true" />
-            <span>主目录</span>
           </button>
-          <span className={styles.path} title={listing?.currentPath}>{listing?.currentPath || '正在读取…'}</span>
         </div>
 
         {listing && listing.rootPaths.length > 0 && (
-          <div className={styles.driveBar} aria-label="选择磁盘">
-            <HardDrive size={14} aria-hidden="true" />
-            {listing.rootPaths.map((root) => {
-              const active = listing.currentPath.toLowerCase().startsWith(root.toLowerCase())
-              return (
-                <button
-                  className={`${styles.driveButton} ${active ? styles.driveButtonActive : ''}`}
-                  key={root}
-                  type="button"
-                  onClick={() => void load(root)}
-                  disabled={loading}
-                >
-                  {root}
-                </button>
-              )
-            })}
+          <div className={styles.driveBar}>
+            <div className={styles.driveBarLabel}>
+              <HardDrive size={12} aria-hidden="true" />
+              <span>此电脑</span>
+            </div>
+            <div className={styles.driveTiles}>
+              {listing.rootPaths.map((root) => {
+                const active = listing.currentPath.toLowerCase().startsWith(root.toLowerCase())
+                return (
+                  <button
+                    className={`${styles.driveTile} ${active ? styles.driveTileActive : ''}`}
+                    key={root}
+                    type="button"
+                    onClick={() => void load(root)}
+                    disabled={loading}
+                  >
+                    <HardDrive size={13} aria-hidden="true" />
+                    <span className={styles.driveLabel}>{root}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
