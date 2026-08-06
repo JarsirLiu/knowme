@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ActiveConversation } from '@/stores/workspace'
+import { useUIStore } from '@/stores/ui'
 import styles from './Sidebar.module.css'
 
 type ProjectPopoverPosition = {
@@ -17,14 +18,16 @@ export function Sidebar() {
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
   const activeProjectId = useWorkspaceStore((state) => state.activeProjectId)
   const active = useWorkspaceStore((state) => state.active)
-  const conversationStatuses = useWorkspaceStore((state) => state.conversationStatuses)
-  const mobileOpen = useWorkspaceStore((state) => state.mobileNavOpen)
-  const deletingConversationId = useWorkspaceStore((state) => state.deletingConversationId)
   const selectProject = useWorkspaceStore((state) => state.selectProject)
   const selectConversation = useWorkspaceStore((state) => state.selectConversation)
   const deleteConversation = useWorkspaceStore((state) => state.deleteConversation)
   const newConversation = useWorkspaceStore((state) => state.newConversation)
-  const setProjectModalOpen = useWorkspaceStore((state) => state.setProjectModalOpen)
+  const mobileOpen = useUIStore((state) => state.mobileNavOpen)
+  const deletingConversationId = useUIStore((state) => state.deletingConversationId)
+  const conversationRuntimeStatuses = useUIStore((state) => state.conversationRuntimeStatuses)
+  const setProjectModalOpen = useUIStore((state) => state.setProjectModalOpen)
+  const setDeletingConversationId = useUIStore((state) => state.setDeletingConversationId)
+  const setMobileNavOpen = useUIStore((state) => state.setMobileNavOpen)
 
   const selectedConversationId = activeConversationId(active)
   const sidebarRef = useRef<HTMLElement>(null)
@@ -58,6 +61,40 @@ export function Sidebar() {
     }, 120)
   }
 
+  const getStatus = useCallback((conversationId: string) => {
+    const runtimeStatus = conversationRuntimeStatuses[conversationId]
+    if (runtimeStatus) return runtimeStatus
+    for (const conversations of Object.values(conversationsByProject)) {
+      const conversation = conversations.find((c) => c.id === conversationId)
+      if (conversation) return conversation.runtimeStatus ?? 'idle'
+    }
+    return 'idle'
+  }, [conversationRuntimeStatuses, conversationsByProject])
+
+  const handleSelectProject = useCallback((projectId: string) => {
+    selectProject(projectId)
+    setMobileNavOpen(false)
+  }, [selectProject, setMobileNavOpen])
+
+  const handleSelectConversation = useCallback((conversationId: string, projectId: string) => {
+    selectConversation(conversationId, projectId)
+    setMobileNavOpen(false)
+  }, [selectConversation, setMobileNavOpen])
+
+  const handleNewConversation = useCallback((projectId: string) => {
+    newConversation(projectId)
+    setMobileNavOpen(false)
+  }, [newConversation, setMobileNavOpen])
+
+  const handleDelete = useCallback((conversationId: string, projectId: string, title: string) => {
+    if (deletingConversationId) return
+    if (!window.confirm(`删除会话“${title}”？`)) return
+    setDeletingConversationId(conversationId)
+    deleteConversation(conversationId, projectId).finally(() => {
+      setDeletingConversationId(null)
+    })
+  }, [deletingConversationId, deleteConversation, setDeletingConversationId])
+
   const hoveredProject = projects.find((project) => project.id === hoveredProjectId)
   const hoveredConversations = hoveredProject ? conversationsByProject[hoveredProject.id] ?? [] : []
   const activeConversationCount = hoveredConversations.filter((conversation) => conversation.status === 'active').length
@@ -71,7 +108,7 @@ export function Sidebar() {
         </svg>
       </div>
 
-      <button className={styles.newButton} type="button" onClick={() => newConversation(activeProjectId)} disabled={!activeProjectId}>
+      <button className={styles.newButton} type="button" onClick={() => handleNewConversation(activeProjectId)} disabled={!activeProjectId}>
         <svg className={styles.newIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M13.5 5.5H6A2 2 0 0 0 4 7.5v10A2 2 0 0 0 6 19.5h10a2 2 0 0 0 2-2V10" />
           <path d="m14 4 6 6M12 14l1.5-4.5L18 8l2 2-1.5 4.5L14 16l-2-2Z" />
@@ -102,7 +139,7 @@ export function Sidebar() {
                 <button
                   type="button"
                   className={styles.projectButton}
-                  onClick={() => selectProject(project.id)}
+                  onClick={() => handleSelectProject(project.id)}
                   title={project.rootPath}
                 >
                   <svg className={styles.projectIcon} width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -113,7 +150,7 @@ export function Sidebar() {
 <button
                     className={styles.projectNewButton}
                     type="button"
-                    onClick={() => newConversation(project.id)}
+onClick={() => handleNewConversation(project.id)}
                   title={`在 ${project.name} 中新建会话`}
                   aria-label={`在 ${project.name} 中新建会话`}
                 >
@@ -135,16 +172,16 @@ export function Sidebar() {
 <button
                           type="button"
                           className={styles.conversationButton}
-                          onClick={() => selectConversation(conversation.id, project.id)}
+                          onClick={() => handleSelectConversation(conversation.id, project.id)}
                         title={conversation.title}
                       >
-                         <span className={`${styles.statusDot} ${conversationStatuses[conversation.id] === 'queued' || conversationStatuses[conversation.id] === 'running' || conversationStatuses[conversation.id] === 'waiting_approval' ? styles.statusDotBusy : ''}`} />
+                         <span className={`${styles.statusDot} ${['queued', 'running', 'waiting_approval'].includes(getStatus(conversation.id)) ? styles.statusDotBusy : ''}`} />
                         <span className={styles.conversationTitle}>{conversation.title}</span>
                       </button>
 <button
                           type="button"
                           className={styles.conversationDeleteButton}
-                          onClick={() => void deleteConversation(conversation.id, project.id)}
+                          onClick={() => handleDelete(conversation.id, project.id, conversation.title)}
                         disabled={deletingConversationId !== null}
                         title="删除会话"
                         aria-label={`删除会话：${conversation.title}`}
@@ -180,7 +217,7 @@ export function Sidebar() {
             <button
               className={styles.popoverNewButton}
               type="button"
-              onClick={() => newConversation(hoveredProject.id)}
+              onClick={() => handleNewConversation(hoveredProject.id)}
               title="新建会话"
               aria-label="新建会话"
             >

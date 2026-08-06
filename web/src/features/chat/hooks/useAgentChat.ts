@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ActiveConversation } from '@/stores/workspace'
 import { client } from '@/api/client'
 import { chatReducer } from '../state/reducer'
-import type { ChatEntry, ChatState } from '../types'
+import type { ChatState } from '../types'
 import { useConversationEventSubscriptions } from './useConversationEventSubscriptions'
-
-export type ActiveConversation =
-  | { kind: 'draft'; draftId: string; projectId: string }
-  | { kind: 'persisted'; conversationId: string; projectId: string }
-
-export type ConversationDisplayStatus = ConversationRuntimeStatus | 'error'
 
 const INITIAL_STATE: ChatState = {
   entries: [],
@@ -66,26 +61,6 @@ export function useAgentChat(
       return
     }
 
-    if (text.trim() === '/compact') {
-      const conversationId = activeTarget.kind === 'persisted' ? activeTarget.conversationId : undefined
-      if (!conversationId) return
-      dispatchFor(key, { type: 'COMPACTION_REQUEST' })
-      try {
-        const result = await client.compactContext(conversationId)
-        for (const event of result.events ?? []) {
-          dispatchFor(key, { type: 'TIMELINE_EVENT', event })
-        }
-        dispatchFor(key, { type: 'COMPACTION_END' })
-      } catch (error) {
-        dispatchFor(key, {
-          type: 'ERROR',
-          message: error instanceof Error ? error.message : String(error),
-          runtimeStatus: currentState.runtimeStatus,
-        })
-      }
-      return
-    }
-
     dispatchFor(key, { type: 'REQUEST_START' })
     try {
       const request = { message: text, clientMessageId: crypto.randomUUID() }
@@ -112,6 +87,30 @@ export function useAgentChat(
       })
     }
   }, [clearStateFor, dispatchFor, onConversationCreated, subscribeConversation, target, targetKey])
+
+  const compactContext = useCallback(async () => {
+    const activeTarget = target
+    const key = targetKey
+    const currentState = statesRef.current[key] ?? INITIAL_STATE
+    if (currentState.isCompacting) return
+    const conversationId = activeTarget?.kind === 'persisted' ? activeTarget.conversationId : undefined
+    if (!conversationId) return
+
+    dispatchFor(key, { type: 'COMPACTION_REQUEST' })
+    try {
+      const result = await client.compactContext(conversationId)
+      for (const event of result.events ?? []) {
+        dispatchFor(key, { type: 'TIMELINE_EVENT', event })
+      }
+      dispatchFor(key, { type: 'COMPACTION_END' })
+    } catch (error) {
+      dispatchFor(key, {
+        type: 'ERROR',
+        message: error instanceof Error ? error.message : String(error),
+        runtimeStatus: currentState.runtimeStatus,
+      })
+    }
+  }, [dispatchFor, target, targetKey])
 
   const approveTool = useCallback(async (toolCallId: string) => {
     const conversationId = target?.kind === 'persisted' ? target.conversationId : undefined
@@ -143,14 +142,14 @@ export function useAgentChat(
     dispatchFor(targetKey, { type: 'CANCEL' })
   }, [dispatchFor, state.entries, target, targetKey])
 
-  const statusByConversation = Object.fromEntries(
+  const statusByConversation: Record<string, ConversationRuntimeStatus | 'error'> = Object.fromEntries(
     Object.entries(states)
       .filter(([key]) => key.startsWith('conversation:'))
       .map(([key, chatState]) => [
         key.replace(/^conversation:/, ''),
         chatState.error ? 'error' : chatState.runtimeStatus,
       ]),
-  ) as Record<string, ConversationDisplayStatus>
+  )
 
   return {
     entries: state.entries,
@@ -158,6 +157,7 @@ export function useAgentChat(
     isCompacting: state.isCompacting,
     error: state.error,
     sendMessage,
+    compactContext,
     approveTool,
     denyTool,
     stop,

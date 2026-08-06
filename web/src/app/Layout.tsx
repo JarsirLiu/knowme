@@ -2,12 +2,13 @@ import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from '@/components/Sidebar/Sidebar'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useUIStore } from '@/stores/ui'
 import styles from './Layout.module.css'
 
 export default function Layout() {
   const initialized = useWorkspaceStore((state) => state.initialized)
-  const mobileNavOpen = useWorkspaceStore((state) => state.mobileNavOpen)
-  const setMobileNavOpen = useWorkspaceStore((state) => state.setMobileNavOpen)
+  const mobileNavOpen = useUIStore((state) => state.mobileNavOpen)
+  const setMobileNavOpen = useUIStore((state) => state.setMobileNavOpen)
   const loadWorkspace = useWorkspaceStore((state) => state.loadWorkspace)
 
   useEffect(() => { void loadWorkspace() }, [loadWorkspace])

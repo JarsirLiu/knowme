@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Header, InputBar, MessageList, useAgentChat } from '@/features/chat'
-import type { ConversationDisplayStatus } from '@/stores/workspace'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useUIStore } from '@/stores/ui'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
 import styles from './ChatPage.module.css'
@@ -13,14 +13,13 @@ export default function ChatPage() {
   const [creatingProject, setCreatingProject] = useState(false)
 
   const active = useWorkspaceStore((state) => state.active)
-  const activeProjectId = useWorkspaceStore((state) => state.activeProjectId)
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
   const createProject = useWorkspaceStore((state) => state.createProject)
   const handleConversationCreated = useWorkspaceStore((state) => state.handleConversationCreated)
-  const setConversationStatuses = useWorkspaceStore((state) => state.setConversationStatuses)
-  const setMobileNavOpen = useWorkspaceStore((state) => state.setMobileNavOpen)
-  const projectModalOpen = useWorkspaceStore((state) => state.projectModalOpen)
-  const setProjectModalOpen = useWorkspaceStore((state) => state.setProjectModalOpen)
+  const projectModalOpen = useUIStore((state) => state.projectModalOpen)
+  const setProjectModalOpen = useUIStore((state) => state.setProjectModalOpen)
+  const setMobileNavOpen = useUIStore((state) => state.setMobileNavOpen)
+  const setConversationRuntimeStatuses = useUIStore((state) => state.setConversationRuntimeStatuses)
 
   const activeConversationIds = useMemo(
     () => Object.values(conversationsByProject)
@@ -37,28 +36,16 @@ export default function ChatPage() {
     isLoading,
     error,
     sendMessage,
+    compactContext,
     approveTool,
     denyTool,
     stop,
-    disposeConversation,
     statusByConversation,
   } = useAgentChat(active, activeConversationIds, handleConversationCreated)
 
-  const persistedConversationStatuses = useMemo(
-    () => Object.fromEntries(
-      Object.values(conversationsByProject)
-        .flat()
-        .map((conversation) => [conversation.id, conversation.runtimeStatus ?? 'idle']),
-    ) as Record<string, ConversationDisplayStatus>,
-    [conversationsByProject],
-  )
-
-  const conversationStatuses = { ...persistedConversationStatuses, ...statusByConversation }
-  const prevStatusesRef = useRef(conversationStatuses)
-  if (prevStatusesRef.current !== conversationStatuses) {
-    prevStatusesRef.current = conversationStatuses
-    setConversationStatuses(conversationStatuses)
-  }
+  useEffect(() => {
+    setConversationRuntimeStatuses(statusByConversation)
+  }, [statusByConversation, setConversationRuntimeStatuses])
 
   const handleNewProject = useCallback(() => {
     setSelectedDirectory(null)
@@ -93,15 +80,20 @@ export default function ChatPage() {
   }, [createProject])
 
   const handleSend = useCallback(() => {
-    if (!input.trim()) return
+    const text = input.trim()
+    if (!text) return
     if (!active) {
       setProjectModalOpen(true)
       return
     }
-    const message = input
+    if (text === '/compact') {
+      setInput('')
+      void compactContext()
+      return
+    }
     setInput('')
-    void sendMessage(message)
-  }, [active, input, sendMessage])
+    void sendMessage(text)
+  }, [active, input, sendMessage, compactContext])
 
   const activeTitle = active?.kind === 'persisted'
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'

@@ -1,8 +1,6 @@
 import { create } from 'zustand'
-import type { Conversation, ConversationRuntimeStatus, Project } from '@superagent/core'
+import type { Conversation, Project } from '@superagent/core'
 import { client } from '@/api/client'
-
-export type ConversationDisplayStatus = ConversationRuntimeStatus | 'error'
 
 export type ActiveConversation =
   | { kind: 'draft'; draftId: string; projectId: string }
@@ -18,10 +16,6 @@ interface WorkspaceState {
   conversationsByProject: Record<string, Conversation[]>
   activeProjectId: string
   active: ActiveConversation | null
-  deletingConversationId: string | null
-  mobileNavOpen: boolean
-  projectModalOpen: boolean
-  conversationStatuses: Record<string, ConversationDisplayStatus>
 }
 
 interface WorkspaceActions {
@@ -32,10 +26,6 @@ interface WorkspaceActions {
   selectConversation: (conversationId: string, projectId: string) => void
   newConversation: (projectId: string) => void
   handleConversationCreated: (data: { conversationId: string; title: string; draftId: string; projectId: string }) => void
-  setDeletingConversationId: (id: string | null) => void
-  setMobileNavOpen: (open: boolean) => void
-  setConversationStatuses: (statuses: Record<string, ConversationDisplayStatus>) => void
-  setProjectModalOpen: (open: boolean) => void
 }
 
 type WorkspaceStore = WorkspaceState & WorkspaceActions
@@ -46,10 +36,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   conversationsByProject: {},
   activeProjectId: '',
   active: null,
-  deletingConversationId: null,
-  mobileNavOpen: false,
-  projectModalOpen: false,
-  conversationStatuses: {},
 
   loadWorkspace: async () => {
     try {
@@ -94,38 +80,27 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   deleteConversation: async (conversationId, projectId) => {
+    await client.deleteConversation(conversationId)
     const state = get()
-    if (state.deletingConversationId) return
-    const conversations = state.conversationsByProject[projectId] ?? []
-    const target = conversations.find((conversation) => conversation.id === conversationId)
-    if (!target) return
-    if (!window.confirm(`删除会话“${target.title}”？`)) return
+    const nextConversations = (state.conversationsByProject[projectId] ?? []).filter(
+      (conversation) => conversation.id !== conversationId,
+    )
+    const activeConversationId = state.active?.kind === 'persisted' ? state.active.conversationId : undefined
+    const deletingActive = activeConversationId === conversationId
 
-    set({ deletingConversationId: conversationId })
-    try {
-      await client.deleteConversation(conversationId)
-      const nextConversations = conversations.filter((conversation) => conversation.id !== conversationId)
-      const activeConversationId = state.active?.kind === 'persisted' ? state.active.conversationId : undefined
-      const deletingActive = activeConversationId === conversationId
-
-      set((current) => ({
-        conversationsByProject: {
-          ...current.conversationsByProject,
-          [projectId]: nextConversations,
-        },
-        ...(deletingActive
-          ? {
-              active: nextConversations[0]
-                ? { kind: 'persisted', conversationId: nextConversations[0].id, projectId }
-                : createDraft(projectId),
-            }
-          : {}),
-      }))
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error))
-    } finally {
-      set({ deletingConversationId: null })
-    }
+    set((current) => ({
+      conversationsByProject: {
+        ...current.conversationsByProject,
+        [projectId]: nextConversations,
+      },
+      ...(deletingActive
+        ? {
+            active: nextConversations[0]
+              ? { kind: 'persisted', conversationId: nextConversations[0].id, projectId }
+              : createDraft(projectId),
+          }
+        : {}),
+    }))
   },
 
   selectProject: (projectId) => {
@@ -136,7 +111,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       active: firstConversation
         ? { kind: 'persisted', conversationId: firstConversation.id, projectId }
         : createDraft(projectId),
-      mobileNavOpen: false,
     })
   },
 
@@ -144,7 +118,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({
       activeProjectId: projectId,
       active: { kind: 'persisted', conversationId, projectId },
-      mobileNavOpen: false,
     })
   },
 
@@ -153,7 +126,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({
       activeProjectId: projectId,
       active: createDraft(projectId),
-      mobileNavOpen: false,
     })
   },
 
@@ -180,9 +152,4 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       }
     })
   },
-
-  setDeletingConversationId: (id) => set({ deletingConversationId: id }),
-  setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
-  setConversationStatuses: (statuses) => set({ conversationStatuses: statuses }),
-  setProjectModalOpen: (open) => set({ projectModalOpen: open }),
 }))
