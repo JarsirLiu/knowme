@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Folder, HardDrive, Home, LoaderCircle, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, ChevronLeft, Folder, HardDrive, Home, LoaderCircle, X } from 'lucide-react'
 import type { DirectoryListing } from '@superagent/core'
 import { client } from '@/api/client'
 import styles from './DirectoryPickerModal.module.css'
@@ -10,37 +10,19 @@ type DirectoryPickerModalProps = {
   onSelect: (directory: string) => void
 }
 
-function getBreadcrumbItems(currentPath: string): Array<{ label: string; path: string }> {
-  const parts = currentPath.split(/[/\\]/).filter(Boolean)
-  if (parts.length === 0) return []
-
-  const isWindows = parts[0].endsWith(':')
-  const sep = isWindows ? '\\' : '/'
-  const items: Array<{ label: string; path: string }> = []
-
-  if (isWindows) {
-    items.push({ label: parts[0], path: parts[0] + sep })
-  } else {
-    items.push({ label: '根目录', path: sep })
-  }
-
-  let built = parts[0].includes(':') ? parts[0] : ''
-  for (let i = 1; i < parts.length; i++) {
-    built += sep + parts[i]
-    items.push({ label: parts[i], path: built })
-  }
-
-  return items
-}
-
 export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPickerModalProps) {
   const [listing, setListing] = useState<DirectoryListing | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [editingPath, setEditingPath] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const editRef = useRef<HTMLInputElement>(null)
   const requestId = useRef(0)
 
   const load = useCallback(async (directory?: string) => {
+    setEditingPath(false)
+    setEditValue('')
     const currentRequest = ++requestId.current
     setLoading(true)
     setError('')
@@ -57,6 +39,20 @@ export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPicke
     }
   }, [])
 
+  const commitPath = useCallback(() => {
+    if (editValue.trim()) {
+      void load(editValue.trim())
+    } else {
+      setEditingPath(false)
+    }
+  }, [editValue, load])
+
+  useEffect(() => {
+    if (editingPath && editRef.current) {
+      editRef.current.select()
+    }
+  }, [editingPath])
+
   useEffect(() => {
     if (!open) return
     void load()
@@ -65,16 +61,20 @@ export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPicke
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        if (editingPath) {
+          setEditingPath(false)
+          setEditValue('')
+        } else {
+          onClose()
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, open])
+  }, [onClose, open, editingPath])
 
-  const breadcrumbItems = useMemo(
-    () => listing ? getBreadcrumbItems(listing.currentPath) : [],
-    [listing]
-  )
+  const currentPath = listing?.currentPath ?? ''
 
   if (!open) return null
 
@@ -101,39 +101,31 @@ export function DirectoryPickerModal({ open, onClose, onSelect }: DirectoryPicke
           >
             <ChevronLeft size={14} aria-hidden="true" />
           </button>
-          <div className={styles.breadcrumb}>
-            {breadcrumbItems.map((item, index) => {
-              const isLast = index === breadcrumbItems.length - 1
-              return (
-                <span className={styles.breadcrumbGroup} key={item.path}>
-                  {index > 0 && <ChevronRight className={styles.breadcrumbSeparator} size={12} />}
-                  {isLast ? (
-                    <span className={styles.breadcrumbLabel}>{item.label}</span>
-                  ) : (
-                    <button
-                      className={styles.breadcrumbLink}
-                      type="button"
-                      onClick={() => void load(item.path)}
-                      disabled={loading}
-                    >
-                      {item.label}
-                    </button>
-                  )}
-                </span>
-              )
-            })}
-            {!listing && loading && <span className={styles.breadcrumbLabel}>正在读取…</span>}
-          </div>
-          <button
-            className={styles.navButton}
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            aria-label="主目录"
-            title="主目录"
-          >
+          <button className={styles.navButton} type="button" onClick={() => void load()} disabled={loading} aria-label="主目录" title="主目录">
             <Home size={14} aria-hidden="true" />
           </button>
+          {editingPath ? (
+            <input
+              ref={editRef}
+              className={styles.pathInput}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitPath()
+              }}
+              onBlur={commitPath}
+              aria-label="编辑路径"
+            />
+          ) : (
+            <span
+              className={styles.fullPath}
+              onClick={() => { setEditingPath(true); setEditValue(currentPath) }}
+              title="点击编辑路径"
+            >
+              {currentPath || '正在读取…'}
+            </span>
+          )}
         </div>
 
         {listing && listing.rootPaths.length > 0 && (

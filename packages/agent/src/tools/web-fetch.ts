@@ -1,3 +1,4 @@
+/// <reference path="../types/html-encoding-sniffer.d.ts" />
 import { tool } from '@openai/agents'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
