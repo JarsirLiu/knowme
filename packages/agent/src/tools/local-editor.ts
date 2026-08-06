@@ -39,12 +39,7 @@ export class LocalEditor implements Editor {
       return { status: 'failed', output: `File already exists: ${operation.path}` }
     }
     fs.mkdirSync(path.dirname(abs), { recursive: true })
-    if (operation.diff) {
-      const content = applyDiff('', operation.diff, 'create')
-      fs.writeFileSync(abs, content, 'utf8')
-    } else {
-      fs.writeFileSync(abs, '', 'utf8')
-    }
+    fs.writeFileSync(abs, operation.diff ?? '', 'utf8')
     return { status: 'completed', output: `Created ${operation.path}` }
   }
 
@@ -62,7 +57,7 @@ export class LocalEditor implements Editor {
       fs.renameSync(abs, dest)
     }
     if (operation.diff) {
-      const content = fs.readFileSync(abs, 'utf8')
+      const content = fs.readFileSync(abs, 'utf8').replace(/\r\n/g, '\n')
       try {
         const patched = applyDiff(content, operation.diff)
         fs.writeFileSync(abs, patched, 'utf8')

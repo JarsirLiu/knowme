@@ -54,7 +54,7 @@ export function chatCompletionsPatchTool(workspace: string): Tool {
   return tool({
     name: 'edit_file',
     description:
-      'Create, update, move, or delete a file in the current workspace using the native V4A patch operation format.',
+      'Create, update, or delete a file in the current workspace. For create_file: set diff to the full file content. For update_file: diff is a V4A patch with `@@` then `-old line` + `+new line` for each changed line. For delete_file: only type and path are needed.',
     parameters: patchParameters,
     execute: async (input) => {
       const operation = patchParameters.parse(input)

@@ -1,4 +1,5 @@
-import { run, RunState, type Agent, type RunStreamEvent } from '@openai/agents'
+import { run, RunState, user, type Agent, type RunStreamEvent } from '@openai/agents'
+import { buildEnvironmentContext, buildTimeReminder } from '@superagent/agent'
 import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
@@ -58,16 +59,21 @@ export class AgentRunExecutor {
       },
     })
 
-    const input = await this.loadInput(agent, agentRun.input, agentRun.state)
-    const state = input instanceof RunState ? await this.applyApprovals(agentRun.id, conversation.id, input, leaseOwner) : undefined
+    const loaded = await this.loadInput(agent, agentRun.input, agentRun.state)
+    const state = loaded instanceof RunState ? await this.applyApprovals(agentRun.id, conversation.id, loaded, leaseOwner) : undefined
+    const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + loaded
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
     let stream: AgentStream | undefined
     try {
-      stream = await run(agent, state ?? input, {
+      stream = await run(agent, state ?? runInput, {
         maxTurns: null,
         stream: true,
         session,
         signal,
+        callModelInputFilter: ({ modelData }) => {
+          modelData.input.push(user(buildTimeReminder()))
+          return modelData
+        },
       })
 
       const streamState: StreamEventState = { sawReasoningDelta: false }
@@ -84,13 +90,6 @@ export class AgentRunExecutor {
         )
         for (const event of waitingEvents) this.timelineStore.publish(event)
         return 'waiting_approval'
-      }
-
-      if (isEmptyOutput(stream.finalOutput)) {
-        // The SDK has already reached its terminal final-output step. This
-        // state cannot be resumed: persisting it would make the coordinator
-        // replay the same empty result until the recovery limit is reached.
-        throw new EmptyFinalOutputError()
       }
 
       await this.completeRun(agentRun.id, conversation.id, runId, stream, session, leaseOwner)
@@ -201,15 +200,6 @@ function approvalDetails(interruption: { rawItem?: unknown }) {
   }
 }
 
-export class EmptyFinalOutputError extends Error {
-  readonly retryable = false
-
-  constructor() {
-    super('Model returned an empty final output')
-    this.name = 'EmptyFinalOutputError'
-  }
-}
-
 interface ProjectReader {
   get(id: string): Promise<{ rootPath: string }>
 }
@@ -218,12 +208,6 @@ function stringifyOutput(value: unknown): string {
   if (typeof value === 'string') return value
   if (value == null) return ''
   return JSON.stringify(value)
-}
-
-function isEmptyOutput(value: unknown): boolean {
-  if (value == null) return true
-  if (typeof value === 'string') return value.trim() === ''
-  return JSON.stringify(value) === undefined
 }
 
 function getErrorState(error: unknown): PersistedRunState | undefined {

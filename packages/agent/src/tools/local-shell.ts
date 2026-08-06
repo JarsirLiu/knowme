@@ -24,9 +24,10 @@ export class LocalShell implements Shell {
     signal?: AbortSignal,
   ): Promise<ShellOutputResult> {
     return new Promise((resolve) => {
+      const isWin = process.platform === 'win32'
       const child = execFile(
-        process.env.SHELL || process.env.ComSpec || 'cmd.exe',
-        process.env.ComSpec ? ['/d', '/s', '/c', command] : ['-c', command],
+        isWin ? 'powershell.exe' : (process.env.SHELL || 'sh'),
+        isWin ? ['-NoProfile', '-Command', command] : ['-c', command],
         {
           cwd: this.workspace,
           timeout: timeoutMs ?? 120_000,

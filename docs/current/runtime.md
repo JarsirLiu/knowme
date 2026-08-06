@@ -72,8 +72,11 @@ Executor 不应该自己创建 HTTP response、启动调度 timer 或直接决�
 During execution, the executor keeps the latest SDK `RunState` when the stream
 fails or is aborted. A run with a checkpoint is returned to `queued` and may be
 resumed up to three attempts; user cancellation still ends the run immediately.
-An SDK stream that ends without a final output is treated as an incomplete run
-and follows the same bounded recovery path instead of being marked completed.
+An SDK stream that ends normally is considered complete even when its final
+text is empty. The Agent SDK has already decided that its tool loop is
+finished; the executor does not add a second text-presence requirement. A
+stream error, abort, pending approval, or persistence failure still follows
+the corresponding failure, cancellation, interruption, or approval path.
 
 ### `AgentRuntime`
 
