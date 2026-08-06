@@ -226,8 +226,19 @@ async function initializeDatabase() {
   await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Conversation_activeRunId_key" ON "Conversation"("activeRunId")')
 }
 
+const EXPRESSION_DEFAULTS = ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME']
+
 async function addColumnIfMissing(table: string, column: string, definition: string) {
   const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("${table}")`)
   if (rows.some((row) => row.name === column)) return
-  await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${definition}`)
+  const expressionDefault = EXPRESSION_DEFAULTS.find((d) =>
+    definition.includes(`DEFAULT ${d}`),
+  )
+  if (expressionDefault) {
+    const stripped = definition.replace(/\s+NOT NULL DEFAULT\s+\S+/i, '').replace(/\s+DEFAULT\s+\S+/i, '')
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${stripped}`)
+    await prisma.$executeRawUnsafe(`UPDATE "${table}" SET "${column}" = ${expressionDefault} WHERE "${column}" IS NULL`)
+  } else {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${definition}`)
+  }
 }

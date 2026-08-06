@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Editor, ApplyPatchOperation, ApplyPatchResult, EditorInvocationContext } from '@openai/agents'
-import { applyDiff } from '@openai/agents-core'
+import { applyDiff } from '@openai/agents'
 
 function resolveSafe(workspace: string, p: string): string {
   const abs = path.resolve(workspace, p)
