@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Header, InputBar, MessageList, useAgentChat } from '@/features/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUIStore } from '@/stores/ui'
+import { client } from '@/api/client'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
 import styles from './ChatPage.module.css'
@@ -36,12 +37,11 @@ export default function ChatPage() {
     isLoading,
     error,
     sendMessage,
-    compactContext,
     approveTool,
     denyTool,
     stop,
     statusByConversation,
-  } = useAgentChat(active, activeConversationIds, handleConversationCreated)
+  } = useAgentChat(client, active, activeConversationIds, handleConversationCreated)
 
   useEffect(() => {
     setConversationRuntimeStatuses(statusByConversation)
@@ -86,14 +86,9 @@ export default function ChatPage() {
       setProjectModalOpen(true)
       return
     }
-    if (text === '/compact') {
-      setInput('')
-      void compactContext()
-      return
-    }
     setInput('')
     void sendMessage(text)
-  }, [active, input, sendMessage, compactContext])
+  }, [active, input, sendMessage])
 
   const activeTitle = active?.kind === 'persisted'
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'

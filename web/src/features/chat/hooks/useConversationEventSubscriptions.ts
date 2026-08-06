@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { ConversationRuntimeStatus, ConversationTimeline } from '@superagent/core'
-import { client } from '@/api/client'
+import type { ConversationRuntimeStatus } from '@superagent/core'
 import { applyTimelineEvent, type ChatAction } from '../state/reducer'
 import type { ChatEntry } from '../types'
+import type { ChatClient } from '../client'
 
 type DispatchConversation = (key: string, action: ChatAction) => void
 type ClearConversationState = (key: string) => void
@@ -11,7 +11,7 @@ function conversationKey(conversationId: string) {
   return `conversation:${conversationId}`
 }
 
-function timelineToEntries(timeline: ConversationTimeline): ChatEntry[] {
+function timelineToEntries(timeline: { conversation: { runtimeStatus?: ConversationRuntimeStatus }; events: import('@superagent/core').AnyTimelineEvent[] }): ChatEntry[] {
   return timeline.events.reduce(
     (entries, event) => applyTimelineEvent(entries, event),
     [] as ChatEntry[],
@@ -19,6 +19,7 @@ function timelineToEntries(timeline: ConversationTimeline): ChatEntry[] {
 }
 
 export function useConversationEventSubscriptions(
+  client: ChatClient,
   dispatchFor: DispatchConversation,
   clearStateFor: ClearConversationState,
 ) {
@@ -54,7 +55,7 @@ export function useConversationEventSubscriptions(
         if (subscriptionsRef.current.get(key) === controller) subscriptionsRef.current.delete(key)
       }
     })()
-  }, [dispatchFor])
+  }, [client, dispatchFor])
 
   const disposeConversation = useCallback((conversationId: string) => {
     const key = conversationKey(conversationId)
