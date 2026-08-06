@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { MessageSquarePlus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ActiveConversation } from '@/stores/workspace'
 import { useUIStore } from '@/stores/ui'
@@ -109,10 +110,7 @@ export function Sidebar() {
       </div>
 
       <button className={styles.newButton} type="button" onClick={() => handleNewConversation(activeProjectId)} disabled={!activeProjectId}>
-        <svg className={styles.newIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M13.5 5.5H6A2 2 0 0 0 4 7.5v10A2 2 0 0 0 6 19.5h10a2 2 0 0 0 2-2V10" />
-          <path d="m14 4 6 6M12 14l1.5-4.5L18 8l2 2-1.5 4.5L14 16l-2-2Z" />
-        </svg>
+        <MessageSquarePlus className={styles.newIcon} size={18} aria-hidden="true" />
         <span>新对话</span>
       </button>
 

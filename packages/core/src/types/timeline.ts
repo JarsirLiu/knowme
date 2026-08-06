@@ -15,6 +15,7 @@ export type TimelineEventType =
   | 'reasoning.delta'
   | 'tool.called'
   | 'tool.arguments'
+  | 'tool.arguments.delta'
   | 'tool.awaiting_approval'
   | 'tool.approved'
   | 'tool.output'
@@ -50,6 +51,7 @@ export interface TimelineEventPayloadMap {
   'reasoning.delta': { messageId: string; text: string }
   'tool.called': { messageId: string; toolCallId: string; name: string }
   'tool.arguments': { toolCallId: string; args: unknown }
+  'tool.arguments.delta': { toolCallId: string; delta: string }
   'tool.awaiting_approval': { toolCallId: string; name: string; args: unknown }
   'tool.approved': { toolCallId: string }
   'tool.output': { toolCallId: string; result: unknown }

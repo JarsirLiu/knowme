@@ -89,7 +89,7 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
   const label = TOOL_LABELS[toolCall.name] || toolCall.name
   const hasResult = toolCall.result !== undefined || toolCall.error !== undefined
   const isTerminal = toolCall.status === 'completed' || toolCall.status === 'failed' || toolCall.status === 'denied'
-  const showArgs = hasArgs(toolCall.args)
+  const showArgs = hasArgs(toolCall.args) || !!toolCall.rawArgs
 
   return (
     <div className={`${styles.toolCall} ${styles[toolCall.status] || ''}`}>
@@ -106,9 +106,9 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
       </div>
 
       {showArgs && (
-        <details className={styles.details}>
+        <details className={styles.details} open={!!toolCall.rawArgs}>
           <summary className={styles.summary}>参数</summary>
-          <pre className={styles.pre}>{formatArgs(toolCall.args)}</pre>
+          <pre className={styles.pre}>{toolCall.rawArgs ?? formatArgs(toolCall.args)}</pre>
         </details>
       )}
 

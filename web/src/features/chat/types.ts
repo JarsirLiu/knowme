@@ -21,6 +21,7 @@ export interface ToolCall {
   id: string
   name: string
   args: unknown
+  rawArgs?: string
   status: ToolCallStatus
   result?: unknown
   error?: string

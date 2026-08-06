@@ -5,8 +5,21 @@ import type { TimelineEventStore } from '../events/timeline-event-store.js'
 export type TimelineDelta =
   | { type: 'message.delta'; data: { messageId: string; text: string } }
   | { type: 'reasoning.delta'; data: { messageId: string; text: string } }
+  | { type: 'tool.called'; data: { messageId: string; toolCallId: string; name: string } }
+  | { type: 'tool.arguments'; data: { toolCallId: string; args: unknown } }
+  | { type: 'tool.arguments.delta'; data: { toolCallId: string; delta: string } }
+  | { type: 'tool.output'; data: { toolCallId: string; result: unknown } }
 
 export type StreamEventState = { sawReasoningDelta: boolean }
+
+// ─── Dispatch ────────────────────────────────────────────────────────────────
+
+/** @deprecated Used by tests. Prefer persistRunStreamEvent. */
+export function extractRawStreamDelta(event: { type: string; data: unknown }, fallbackMessageId: string): TimelineDelta | null {
+  if (event.type !== 'raw_model_stream_event') return null
+  const deltas = handleRawModelEvent(event.data, fallbackMessageId)
+  return deltas.length > 0 ? deltas[0] : null
+}
 
 export async function persistRunStreamEvent(
   store: TimelineEventStore,
@@ -17,10 +30,11 @@ export async function persistRunStreamEvent(
   leaseOwner?: string,
 ): Promise<void> {
   if (event.type === 'raw_model_stream_event') {
-    const delta = extractRawStreamDelta(event, runId)
-    if (!delta) return
-    if (delta.type === 'reasoning.delta') state.sawReasoningDelta = true
-    await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
+    const deltas = handleRawModelEvent(event.data, runId)
+    for (const delta of deltas) {
+      if (delta.type === 'reasoning.delta') state.sawReasoningDelta = true
+      await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
+    }
     return
   }
 
@@ -29,78 +43,184 @@ export async function persistRunStreamEvent(
   if (!item) return
   const raw = asRecord(item.rawItem) ?? {}
 
-  if (event.name === 'tool_called' && item.type === 'tool_call_item') {
-    const id = getToolCallId(raw)
-      await append(store, conversationId, runId, 'tool.called', {
-        messageId: runId,
-        toolCallId: id,
-        name: String(raw.name ?? 'unknown'),
-      }, leaseOwner)
-    if (raw.arguments !== undefined) {
-      await append(store, conversationId, runId, 'tool.arguments', {
-        toolCallId: id,
-        args: parseToolArguments(raw.arguments),
-      }, leaseOwner)
-    }
-  }
-
-  if (event.name === 'tool_output' && item.type === 'tool_call_output_item') {
-    await append(store, conversationId, runId, 'tool.output', {
-      toolCallId: getToolCallId(raw),
-      result: raw.output,
-    }, leaseOwner)
-  }
-
-  if (!state.sawReasoningDelta && event.name === 'reasoning_item_created' && item.type === 'reasoning_item') {
-    const text = extractReasoningText(raw)
-    if (text) {
-      await append(store, conversationId, runId, 'reasoning.delta', {
-        messageId: getStreamMessageId(raw, undefined, runId),
-        text,
-      }, leaseOwner)
-    }
+  const deltas = handleRunItemEvent(event.name, item.type, raw, runId, state)
+  for (const delta of deltas) {
+    await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
   }
 }
 
-export function getToolCallId(raw: Record<string, unknown>): string {
-  for (const key of ['callId', 'call_id', 'toolCallId', 'tool_call_id', 'id']) {
-    if (typeof raw[key] === 'string' && raw[key]) return raw[key] as string
+// ─── Raw Model Event Handlers ────────────────────────────────────────────────
+
+type RawModelHandler = (data: Record<string, unknown>, runId: string) => TimelineDelta[]
+
+const rawModelHandlers: RawModelHandler[] = [
+  handleTextDelta,
+  handleReasoningDelta,
+  handleToolCallOutputItemAdded,
+  handleFunctionCallArgDelta,
+  handleCustomToolCallArgDelta,
+]
+
+function handleRawModelEvent(data: unknown, runId: string): TimelineDelta[] {
+  const record = asRecord(data)
+  if (!record) return []
+  for (const handler of rawModelHandlers) {
+    const result = handler(record, runId)
+    if (result.length > 0) return result
   }
-  return 'unknown'
+  return []
 }
 
-export function extractRawStreamDelta(event: RunStreamEvent, fallbackMessageId: string): TimelineDelta | null {
-  if (event.type !== 'raw_model_stream_event') return null
-  const data = asRecord(event.data)
-  if (!data) return null
-
-  // The SDK exposes a normalized raw event and, for some providers, a nested
-  // provider event. Only parse text from the normalized branch so one provider
-  // delta becomes exactly one timeline event.
-  const providerEvent = asRecord(data.event)
+function handleTextDelta(data: Record<string, unknown>, runId: string): TimelineDelta[] {
   const type = typeof data.type === 'string' ? data.type : ''
   const text = typeof data.delta === 'string' ? data.delta : ''
-  if (text && (type === 'output_text_delta' || type === 'text-delta')) {
-    return {
-      type: 'message.delta',
-      data: { messageId: getStreamMessageId(data, providerEvent, fallbackMessageId), text },
-    }
-  }
+  if (!text || (type !== 'output_text_delta' && type !== 'text-delta')) return []
+  return [{
+    type: 'message.delta',
+    data: { messageId: getStreamMessageId(data, asRecord(data.event), runId), text },
+  }]
+}
 
-  const reasoningEvent = type === 'model' ? providerEvent : data
-  const reasoningType = typeof reasoningEvent?.type === 'string' ? reasoningEvent.type : ''
-  const reasoningText = typeof reasoningEvent?.delta === 'string' ? reasoningEvent.delta : ''
-  if (reasoningText && (
-    reasoningType === 'reasoning-delta' ||
-    reasoningType === 'response.reasoning_summary_text.delta' ||
-    reasoningType === 'response.reasoning_text.delta'
-  )) {
-    return {
+function handleReasoningDelta(data: Record<string, unknown>, runId: string): TimelineDelta[] {
+  const type = typeof data.type === 'string' ? data.type : ''
+  if (type !== 'model') return []
+  const providerEvent = asRecord(data.event)
+  if (!providerEvent) return []
+  const eventType = typeof providerEvent.type === 'string' ? providerEvent.type : ''
+  const text = typeof providerEvent.delta === 'string' ? providerEvent.delta : ''
+  if (!text) return []
+  if (
+    eventType === 'reasoning-delta' ||
+    eventType === 'response.reasoning_summary_text.delta' ||
+    eventType === 'response.reasoning_text.delta'
+  ) {
+    return [{
       type: 'reasoning.delta',
-      data: { messageId: getStreamMessageId(data, providerEvent, fallbackMessageId), text: reasoningText },
+      data: { messageId: getStreamMessageId(data, providerEvent, runId), text },
+    }]
+  }
+  return []
+}
+
+function handleToolCallOutputItemAdded(data: Record<string, unknown>, _runId: string): TimelineDelta[] {
+  const type = typeof data.type === 'string' ? data.type : ''
+  if (type !== 'model') return []
+  const providerEvent = asRecord(data.event)
+  if (!providerEvent) return []
+  const eventType = typeof providerEvent.type === 'string' ? providerEvent.type : ''
+  if (eventType !== 'response.output_item.added') return []
+  const item = asRecord(providerEvent.item)
+  if (!item) return []
+  const itemType = typeof item.type === 'string' ? item.type : ''
+  if (itemType !== 'function_call' && itemType !== 'custom_tool_call') return []
+  const toolCallId = getToolCallId(item)
+  const name = String(item.name ?? 'unknown')
+  return [{
+    type: 'tool.called',
+    data: { messageId: getStreamMessageId(data, providerEvent, _runId), toolCallId, name },
+  }]
+}
+
+function handleFunctionCallArgDelta(data: Record<string, unknown>, _runId: string): TimelineDelta[] {
+  const type = typeof data.type === 'string' ? data.type : ''
+  if (type !== 'model') return []
+  const providerEvent = asRecord(data.event)
+  if (!providerEvent) return []
+  const eventType = typeof providerEvent.type === 'string' ? providerEvent.type : ''
+  if (eventType !== 'response.function_call_arguments.delta') return []
+  const toolCallId = pickString(providerEvent, ['call_id', 'callId', 'item_id', 'itemId'])
+  const delta = typeof providerEvent.delta === 'string' ? providerEvent.delta : ''
+  if (!toolCallId || !delta) return []
+  return [{ type: 'tool.arguments.delta', data: { toolCallId, delta } }]
+}
+
+function handleCustomToolCallArgDelta(data: Record<string, unknown>, _runId: string): TimelineDelta[] {
+  const type = typeof data.type === 'string' ? data.type : ''
+  if (type !== 'model') return []
+  const providerEvent = asRecord(data.event)
+  if (!providerEvent) return []
+  const eventType = typeof providerEvent.type === 'string' ? providerEvent.type : ''
+  if (eventType !== 'response.custom_tool_call_input.delta') return []
+  const toolCallId = pickString(providerEvent, ['call_id', 'callId', 'item_id', 'itemId'])
+  const delta = typeof providerEvent.delta === 'string' ? providerEvent.delta : ''
+  if (!toolCallId || !delta) return []
+  return [{ type: 'tool.arguments.delta', data: { toolCallId, delta } }]
+}
+
+// ─── Run Item Event Handlers ─────────────────────────────────────────────────
+
+type RunItemHandler = {
+  match: (name: string, itemType: string) => boolean
+  handle: (raw: Record<string, unknown>, runId: string, state: StreamEventState) => TimelineDelta[]
+}
+
+const runItemHandlers: RunItemHandler[] = [
+  { match: (n, t) => n === 'tool_called' && t === 'tool_call_item', handle: handleToolCalled },
+  { match: (n, t) => n === 'tool_output' && t === 'tool_call_output_item', handle: handleToolOutput },
+  { match: (n, t) => n === 'reasoning_item_created' && t === 'reasoning_item', handle: handleReasoningItem },
+]
+
+function handleRunItemEvent(
+  name: string,
+  item: unknown,
+  raw: Record<string, unknown>,
+  runId: string,
+  state: StreamEventState,
+): TimelineDelta[] {
+  const itemType = typeof item === 'object' && item !== null
+    ? (item as { type?: string }).type ?? ''
+    : ''
+  for (const handler of runItemHandlers) {
+    if (handler.match(name, itemType)) {
+      return handler.handle(raw, runId, state)
     }
   }
-  return null
+  return []
+}
+
+function handleToolCalled(raw: Record<string, unknown>, runId: string, _state: StreamEventState): TimelineDelta[] {
+  const id = getToolCallId(raw)
+  const result: TimelineDelta[] = [{
+    type: 'tool.called',
+    data: { messageId: runId, toolCallId: id, name: String(raw.name ?? 'unknown') },
+  }]
+  if (raw.arguments !== undefined) {
+    result.push({
+      type: 'tool.arguments',
+      data: { toolCallId: id, args: parseToolArguments(raw.arguments) },
+    })
+  }
+  return result
+}
+
+function handleToolOutput(raw: Record<string, unknown>, _runId: string, _state: StreamEventState): TimelineDelta[] {
+  return [{
+    type: 'tool.output',
+    data: { toolCallId: getToolCallId(raw), result: raw.output },
+  }]
+}
+
+function handleReasoningItem(raw: Record<string, unknown>, runId: string, state: StreamEventState): TimelineDelta[] {
+  if (state.sawReasoningDelta) return []
+  const text = extractReasoningText(raw)
+  if (!text) return []
+  return [{
+    type: 'reasoning.delta',
+    data: { messageId: getStreamMessageId(raw, undefined, runId), text },
+  }]
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+export function getToolCallId(raw: Record<string, unknown>): string {
+  return pickString(raw, ['callId', 'call_id', 'toolCallId', 'tool_call_id', 'id']) ?? 'unknown'
+}
+
+function pickString(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    if (typeof obj[key] === 'string' && obj[key]) return obj[key] as string
+  }
+  return undefined
 }
 
 async function append<T extends TimelineEventType>(

@@ -302,7 +302,19 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   if (event.type === 'tool.arguments') {
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
-      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { args: event.data.args }),
+      assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { args: event.data.args, rawArgs: undefined }),
+    }))
+  }
+
+  if (event.type === 'tool.arguments.delta') {
+    return updateTimelineTurn(entries, runId, (turn) => ({
+      ...turn,
+      assistantMessage: (() => {
+        const tool = turn.assistantMessage.toolCalls.find((t) => t.id === event.data.toolCallId)
+        if (!tool) return turn.assistantMessage
+        const prev = tool.rawArgs ?? ''
+        return updateToolCall(turn.assistantMessage, event.data.toolCallId, { rawArgs: prev + event.data.delta })
+      })(),
     }))
   }
 

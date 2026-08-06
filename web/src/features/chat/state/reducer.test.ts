@@ -113,6 +113,23 @@ describe('chatReducer', () => {
     expect(state.isLoading).toBe(true)
   })
 
+  it('accumulates tool.arguments.delta and replaces with final tool.arguments', () => {
+    let state = apply(initialState, turnStarted())
+    state = apply(state, event('tool.called', { messageId: 'assistant-1', toolCallId: 'tool-1', name: 'read_file' }, 'run-1', 2))
+    state = apply(state, event('tool.arguments.delta', { toolCallId: 'tool-1', delta: '{"file' }, 'run-1', 3))
+    state = apply(state, event('tool.arguments.delta', { toolCallId: 'tool-1', delta: '":"RE' }, 'run-1', 4))
+    state = apply(state, event('tool.arguments.delta', { toolCallId: 'tool-1', delta: 'ADME.md"}' }, 'run-1', 5))
+
+    let tool = latestTurn(state).assistantMessage.toolCalls[0]
+    expect(tool.rawArgs).toBe('{"file":"README.md"}')
+    expect(tool.args).toEqual({})
+
+    state = apply(state, event('tool.arguments', { toolCallId: 'tool-1', args: { path: 'README.md' } }, 'run-1', 6))
+    tool = latestTurn(state).assistantMessage.toolCalls[0]
+    expect(tool.rawArgs).toBeUndefined()
+    expect(tool.args).toEqual({ path: 'README.md' })
+  })
+
   it('keeps separate conversation state transitions independent', () => {
     const conversationA = apply(initialState, turnStarted())
     const conversationB = apply(initialState, event('turn.started', {
