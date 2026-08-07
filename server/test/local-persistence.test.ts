@@ -11,7 +11,8 @@ import { TimelineEventStore } from '../src/modules/events/timeline-event-store.j
 import { PrismaAgentSession } from '../src/modules/history/agent-session-store.js'
 import { persistCompactionMessage } from '../src/modules/history/session-compaction.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
-import { extractRawStreamDelta } from '../src/modules/chat/turn.service.js'
+import { extractRawStreamDelta, extractRunItemStreamDelta } from '../src/modules/chat/stream-event-mapper.js'
+import type { StreamEventState } from '../src/modules/chat/stream-event-mapper.js'
 import { RunCoordinator } from '../src/modules/runs/run-coordinator.js'
 import { PrismaRunLifecycleRepository } from '../src/modules/runs/run-lifecycle-repository.js'
 import { RunScheduler } from '../src/modules/runs/run-scheduler.js'
@@ -88,6 +89,136 @@ test('normalizes reasoning and message streaming events from Agents SDK provider
         event: { type: 'output_text_delta', itemId: 'message-1', delta: '完成' },
       },
     } as any, 'run-4'),
+    null,
+  )
+})
+
+test('maps function_call output item added to tool.called', () => {
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: { id: 'fc_1', type: 'function_call', call_id: 'call_abc', name: 'read_file', arguments: '' },
+        },
+      },
+    } as any, 'run-1'),
+    {
+      type: 'tool.called',
+      data: { messageId: 'run-1', toolCallId: 'call_abc', name: 'read_file' },
+    },
+  )
+})
+
+test('maps custom_tool_call output item added to tool.called', () => {
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: { id: 'ct_1', type: 'custom_tool_call', call_id: 'call_xyz', name: 'run_command', input: '' },
+        },
+      },
+    } as any, 'run-2'),
+    {
+      type: 'tool.called',
+      data: { messageId: 'run-2', toolCallId: 'call_xyz', name: 'run_command' },
+    },
+  )
+})
+
+test('ignores non-tool output items added', () => {
+  assert.equal(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: { id: 'msg_1', type: 'message', role: 'assistant', content: [] },
+        },
+      },
+    } as any, 'run-3'),
+    null,
+  )
+})
+
+test('maps function_call_arguments.delta to tool.arguments.delta', () => {
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: { type: 'response.function_call_arguments.delta', call_id: 'call_abc', delta: '{"file":' },
+      },
+    } as any, 'run-4'),
+    {
+      type: 'tool.arguments.delta',
+      data: { toolCallId: 'call_abc', delta: '{"file":' },
+    },
+  )
+})
+
+test('maps custom_tool_call_input.delta to tool.arguments.delta', () => {
+  assert.deepEqual(
+    extractRawStreamDelta({
+      type: 'raw_model_stream_event',
+      data: {
+        type: 'model',
+        event: { type: 'response.custom_tool_call_input.delta', call_id: 'call_xyz', delta: 'ls' },
+      },
+    } as any, 'run-5'),
+    {
+      type: 'tool.arguments.delta',
+      data: { toolCallId: 'call_xyz', delta: 'ls' },
+    },
+  )
+})
+
+test('maps run_item tool_called to tool.called and tool.arguments', () => {
+  const state: StreamEventState = { sawReasoningDelta: false }
+  const result = extractRunItemStreamDelta({
+    name: 'tool_called',
+    item: {
+      type: 'tool_call_item',
+      rawItem: { callId: 'call_abc', name: 'read_file', arguments: '{"path":"README.md"}' },
+    },
+  } as any, 'run-1', state)
+  assert.deepEqual(result, {
+    type: 'tool.called',
+    data: { messageId: 'run-1', toolCallId: 'call_abc', name: 'read_file' },
+  })
+})
+
+test('maps run_item tool_output to tool.output', () => {
+  const state: StreamEventState = { sawReasoningDelta: false }
+  const result = extractRunItemStreamDelta({
+    name: 'tool_output',
+    item: {
+      type: 'tool_call_output_item',
+      rawItem: { callId: 'call_abc', output: 'file content' },
+    },
+  } as any, 'run-2', state)
+  assert.deepEqual(result, {
+    type: 'tool.output',
+    data: { toolCallId: 'call_abc', result: 'file content' },
+  })
+})
+
+test('ignores unmatched run_item events', () => {
+  const state: StreamEventState = { sawReasoningDelta: false }
+  assert.equal(
+    extractRunItemStreamDelta({
+      name: 'unknown_event',
+      item: { type: 'unknown_item', rawItem: {} },
+    } as any, 'run-3', state),
     null,
   )
 })

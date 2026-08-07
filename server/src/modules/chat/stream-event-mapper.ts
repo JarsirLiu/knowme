@@ -21,6 +21,17 @@ export function extractRawStreamDelta(event: { type: string; data: unknown }, fa
   return deltas.length > 0 ? deltas[0] : null
 }
 
+/** @deprecated Used by tests. Prefer persistRunStreamEvent. */
+export function extractRunItemStreamDelta(
+  event: { name: string; item: { type: string; rawItem: unknown } },
+  runId: string,
+  state: StreamEventState,
+): TimelineDelta | null {
+  const raw = asRecord(event.item.rawItem) ?? {}
+  const deltas = handleRunItemEvent(event.name, event.item.type, raw, runId, state)
+  return deltas.length > 0 ? deltas[0] : null
+}
+
 export async function persistRunStreamEvent(
   store: TimelineEventStore,
   conversationId: string,
@@ -162,14 +173,11 @@ const runItemHandlers: RunItemHandler[] = [
 
 function handleRunItemEvent(
   name: string,
-  item: unknown,
+  itemType: string,
   raw: Record<string, unknown>,
   runId: string,
   state: StreamEventState,
 ): TimelineDelta[] {
-  const itemType = typeof item === 'object' && item !== null
-    ? (item as { type?: string }).type ?? ''
-    : ''
   for (const handler of runItemHandlers) {
     if (handler.match(name, itemType)) {
       return handler.handle(raw, runId, state)

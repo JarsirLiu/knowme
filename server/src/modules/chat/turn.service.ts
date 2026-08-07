@@ -5,7 +5,6 @@ import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import { TimelineEventHub } from '../events/timeline-event-hub.js'
 import { RunCoordinator } from '../runs/run-coordinator.js'
-import { extractRawStreamDelta } from './stream-event-mapper.js'
 
 export type TurnTarget =
   | { projectId: string; conversationId?: undefined }
@@ -92,5 +91,3 @@ export class TurnService {
     return event?.sequence ?? 0
   }
 }
-
-export { extractRawStreamDelta }
