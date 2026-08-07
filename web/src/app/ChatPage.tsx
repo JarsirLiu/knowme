@@ -113,7 +113,7 @@ export default function ChatPage() {
         onSend={handleSend}
         onStop={stop}
         isLoading={isLoading}
-        placeholder="描述你要完成的任务…"
+        placeholder="Do anything"
       />
 
       <ProjectModal

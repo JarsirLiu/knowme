@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 24px 14px;
+  padding: 0 24px 16px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -13,12 +13,12 @@
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  min-height: 124px;
+  min-height: 112px;
   padding: 12px 14px 10px;
   background: #fff;
   border: 1px solid #dfe4e7;
-  border-radius: 22px;
-  box-shadow: 0 6px 22px rgba(31, 43, 51, .08), 0 1px 3px rgba(31, 43, 51, .04);
+  border-radius: 20px;
+  box-shadow: 0 6px 22px rgba(31, 43, 51, .06), 0 1px 3px rgba(31, 43, 51, .03);
   width: 100%;
   max-width: 900px;
   transition: border-color 0.15s;

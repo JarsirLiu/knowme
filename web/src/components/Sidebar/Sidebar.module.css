@@ -14,12 +14,12 @@
 .brandName { color: #353c41; font-size: 18px; font-weight: 700; }
 .brandChevron { color: #7b858c; }
 
-.newButton { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 8px; border: 0; border-radius: 9px; background: transparent; color: #3f474d; cursor: pointer; text-align: left; font: inherit; font-size: 14px; }
+.newButton { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 9px; background: transparent; color: #3f474d; cursor: pointer; text-align: left; font: inherit; font-size: 13px; }
 .newButton:disabled { opacity: .45; cursor: not-allowed; }
 .newButton:hover:not(:disabled) { background: #e4edf3; color: #1e282f; }
 .newIcon { color: #57636b; }
 
-.sectionHeader { display: flex; align-items: center; gap: 7px; padding: 24px 8px 8px; color: #8e989f; font-size: 14px; font-weight: 650; }
+.sectionHeader { display: flex; align-items: center; gap: 7px; padding: 20px 8px 6px; color: #8e989f; font-size: 13px; font-weight: 600; }
 .addProjectButton { display: grid; place-items: center; margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #77838b; cursor: pointer; }
 .addProjectButton:hover { background: #e1eaf0; color: #263139; }
 
@@ -33,11 +33,11 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-radius: 9px;
   background: transparent;
   color: #4b545a;
-  font-size: 14px;
+  font-size: 13px;
 }
 .projectRow:hover, .projectButton:hover { background: #e5edf2; color: #232d33; }
 .projectIcon { flex: 0 0 17px; color: #626e75; }
@@ -76,7 +76,7 @@
   padding: 6px 4px 6px 8px;
   border-radius: 8px;
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
 }
 .conversationDeleteButton {
   display: grid;

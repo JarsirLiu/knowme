@@ -1,7 +1,7 @@
-.header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 20px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #e8edef; }
+.header { display: flex; align-items: center; justify-content: space-between; min-height: 50px; padding: 0 20px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #f0f1f2; }
 .headerLeft { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .folderIcon { display: grid; place-items: center; width: 20px; height: 20px; color: #4f5b62; }
-.headerTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #252b30; font-size: 16px; font-weight: 650; }
+.headerTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #252b30; font-size: 15px; font-weight: 600; }
 .headerRight { display: flex; align-items: center; gap: 8px; }
 .headerButton { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #77838a; cursor: pointer; }
 .headerButton:hover { background: #eef3f5; color: #273239; }

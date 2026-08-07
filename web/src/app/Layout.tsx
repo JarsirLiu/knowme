@@ -7,7 +7,7 @@ import styles from './Layout.module.css'
 
 const STORAGE_KEY = 'superagent_sidebar_width'
 const MOBILE_BREAK = 760
-const DEFAULT_WIDTH = 280
+const DEFAULT_WIDTH = 260
 const MIN_WIDTH = 220
 const MAX_WIDTH = 480
 const HANDLE_WIDTH = 5
