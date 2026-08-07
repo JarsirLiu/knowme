@@ -1,8 +1,81 @@
-.appLayout { display: flex; width: 100vw; height: 100vh; overflow: hidden; background: #fff; }
-.loadingScreen { display: grid; place-items: center; width: 100%; height: 100vh; color: #858985; background: #fff; font-size: 13px; }
-.mobileBackdrop { display: none; }
+.appLayout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #fff;
+}
+
+.loadingScreen {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100vh;
+  color: #858985;
+  background: #fff;
+  font-size: 13px;
+}
+
+.sidebarWrapper {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.mainArea {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.resizeHandle {
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.resizeHandle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 40px;
+  background: #c5cdd3;
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+.resizeHandle:hover::after {
+  background: #7b8a93;
+  opacity: 0.8;
+}
+
+body.dragging {
+  user-select: none;
+}
+
+.mobileBackdrop {
+  display: none;
+}
 
 @media (max-width: 760px) {
   .appLayout { display: block; }
-  .mobileBackdrop { display: block; position: fixed; inset: 0; z-index: 15; border: 0; background: rgba(0, 0, 0, .28); }
+  .sidebarWrapper { display: none; }
+  .mobileBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    border: 0;
+    background: rgba(0, 0, 0, .28);
+  }
 }

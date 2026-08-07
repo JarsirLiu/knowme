@@ -14,7 +14,12 @@ function activeConversationId(active: ActiveConversation | null): string | undef
   return active?.kind === 'persisted' ? active.conversationId : undefined
 }
 
-export function Sidebar() {
+export interface SidebarProps {
+  /** Desktop width in pixels. Mobile: ignored (overlay). */
+  width?: number
+}
+
+export function Sidebar({ width }: SidebarProps) {
   const projects = useWorkspaceStore((state) => state.projects)
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
   const activeProjectId = useWorkspaceStore((state) => state.activeProjectId)
@@ -89,7 +94,7 @@ export function Sidebar() {
 
   const handleDelete = useCallback((conversationId: string, projectId: string, title: string) => {
     if (deletingConversationId) return
-    if (!window.confirm(`删除会话“${title}”？`)) return
+    if (!window.confirm(`删除会话"${title}"？`)) return
     setDeletingConversationId(conversationId)
     deleteConversation(conversationId, projectId).finally(() => {
       setDeletingConversationId(null)
@@ -101,7 +106,12 @@ export function Sidebar() {
   const activeConversationCount = hoveredConversations.filter((conversation) => conversation.status === 'active').length
 
   return (
-    <aside ref={sidebarRef} className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
+    <aside
+      ref={sidebarRef}
+      className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}
+      style={width != null ? { width } : undefined}
+      role="complementary"
+    >
       <div className={styles.brandRow}>
         <div className={styles.brandName}>SuperAgent</div>
         <svg className={styles.brandChevron} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -145,10 +155,10 @@ export function Sidebar() {
                   </svg>
                   <span className={styles.projectName}>{project.name}</span>
                 </button>
-<button
-                    className={styles.projectNewButton}
-                    type="button"
-onClick={() => handleNewConversation(project.id)}
+                <button
+                  className={styles.projectNewButton}
+                  type="button"
+                  onClick={() => handleNewConversation(project.id)}
                   title={`在 ${project.name} 中新建会话`}
                   aria-label={`在 ${project.name} 中新建会话`}
                 >
@@ -167,19 +177,19 @@ onClick={() => handleNewConversation(project.id)}
                       key={conversation.id}
                       className={`${styles.conversationItem} ${selected ? styles.conversationItemActive : ''}`}
                     >
-<button
-                          type="button"
-                          className={styles.conversationButton}
-                          onClick={() => handleSelectConversation(conversation.id, project.id)}
+                      <button
+                        type="button"
+                        className={styles.conversationButton}
+                        onClick={() => handleSelectConversation(conversation.id, project.id)}
                         title={conversation.title}
                       >
-                         <span className={`${styles.statusDot} ${['queued', 'running', 'waiting_approval'].includes(getStatus(conversation.id)) ? styles.statusDotBusy : ''}`} />
+                        <span className={`${styles.statusDot} ${['queued', 'running', 'waiting_approval'].includes(getStatus(conversation.id)) ? styles.statusDotBusy : ''}`} />
                         <span className={styles.conversationTitle}>{conversation.title}</span>
                       </button>
-<button
-                          type="button"
-                          className={styles.conversationDeleteButton}
-                          onClick={() => handleDelete(conversation.id, project.id, conversation.title)}
+                      <button
+                        type="button"
+                        className={styles.conversationDeleteButton}
+                        onClick={() => handleDelete(conversation.id, project.id, conversation.title)}
                         disabled={deletingConversationId !== null}
                         title="删除会话"
                         aria-label={`删除会话：${conversation.title}`}
@@ -238,7 +248,6 @@ onClick={() => handleNewConversation(project.id)}
           </div>
         </div>
       )}
-
     </aside>
   )
 }
