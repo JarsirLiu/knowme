@@ -204,7 +204,7 @@ function handleToolCalled(raw: Record<string, unknown>, runId: string, _state: S
 function handleToolOutput(raw: Record<string, unknown>, _runId: string, _state: StreamEventState): TimelineDelta[] {
   return [{
     type: 'tool.output',
-    data: { toolCallId: getToolCallId(raw), result: raw.output },
+    data: { toolCallId: getToolCallId(raw), result: normalizeSdkToolOutput(raw.output) },
   }]
 }
 
@@ -248,6 +248,12 @@ async function append<T extends TimelineEventType>(
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
+}
+
+function normalizeSdkToolOutput(value: unknown): unknown {
+  const record = asRecord(value)
+  if (record?.type === 'text' && typeof record.text === 'string') return record.text
+  return value
 }
 
 function getStreamMessageId(

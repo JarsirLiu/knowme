@@ -212,6 +212,27 @@ test('maps run_item tool_output to tool.output', () => {
   })
 })
 
+test('unwraps the Agent SDK text envelope from tool output', () => {
+  const state: StreamEventState = { sawReasoningDelta: false }
+  const result = extractRunItemStreamDelta({
+    name: 'tool_output',
+    item: {
+      type: 'tool_call_output_item',
+      rawItem: {
+        callId: 'call_shell',
+        output: {
+          type: 'text',
+          text: 'fatal: not a git repository\nCommand exited with code 1.',
+        },
+      },
+    },
+  } as any, 'run-shell', state)
+  assert.deepEqual(result, {
+    type: 'tool.output',
+    data: { toolCallId: 'call_shell', result: 'fatal: not a git repository\nCommand exited with code 1.' },
+  })
+})
+
 test('ignores unmatched run_item events', () => {
   const state: StreamEventState = { sawReasoningDelta: false }
   assert.equal(

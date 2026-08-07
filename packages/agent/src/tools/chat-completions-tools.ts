@@ -1,5 +1,5 @@
 import { tool } from '@openai/agents'
-import type { ApplyPatchOperation, ShellAction, Tool } from '@openai/agents'
+import type { ApplyPatchOperation, ApplyPatchResult, ShellAction, ShellResult, Tool } from '@openai/agents'
 import { z } from 'zod'
 import { LocalEditor } from './local-editor.js'
 import { LocalShell } from './local-shell.js'
@@ -27,8 +27,35 @@ function normalizeNumber(value: number | string | null | undefined): number | un
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function asToolOutput(value: unknown): string {
+function formatShellResult(value: ShellResult): string {
+  return value.output.map((item) => {
+    const stdout = item.stdout.trimEnd()
+    const stderr = item.stderr.trimEnd()
+    const outcome = item.outcome.type === 'timeout'
+      ? 'Command timed out.'
+      : item.outcome.type === 'exit' && item.outcome.exitCode !== null && item.outcome.exitCode !== 0
+        ? `Command exited with code ${item.outcome.exitCode}.`
+        : ''
+    return [stdout, stderr, outcome].filter(Boolean).join('\n') || 'Command completed with no output.'
+  }).join('\n\n')
+}
+
+function formatToolOutput(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+function asToolOutput(value: unknown): string {
+  if (isShellResult(value)) return formatShellResult(value)
+  if (isApplyPatchResult(value)) return value.output ?? `File operation ${value.status}.`
+  return formatToolOutput(value)
+}
+
+function isShellResult(value: unknown): value is ShellResult {
+  return Boolean(value && typeof value === 'object' && 'output' in value && Array.isArray(value.output))
+}
+
+function isApplyPatchResult(value: unknown): value is ApplyPatchResult {
+  return Boolean(value && typeof value === 'object' && 'status' in value && 'output' in value)
 }
 
 export function chatCompletionsShellTool(workspace: string): Tool {

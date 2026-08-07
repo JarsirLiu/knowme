@@ -144,6 +144,10 @@ Agents SDK RunStreamEvent
   -> SSE
 ```
 
+内置工具在 `packages/agent` 适配层把 Shell 和文件操作结果转换为可读文本；服务端
+`stream-event-mapper` 只移除 Agent SDK 的通用文本包装后再写入 `tool.output` Timeline
+事件。Timeline 不向 Web 暴露 SDK 的原始 output envelope，也不要求 Web 解析工具实现细节。
+
 事件映射必须保证一个 provider delta 不重复变成多个 Timeline 事件，并保留
 `message.delta`、`reasoning.delta`、`tool.called`、`tool.arguments`、
 `tool.output` 等当前 UI 所需事件。

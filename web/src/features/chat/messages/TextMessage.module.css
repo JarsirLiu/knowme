@@ -1,8 +1,8 @@
 .markdown {
   min-width: 0;
   color: #30363b;
-  font-size: 13px;
-  line-height: 1.58;
+  font-size: 14px;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 
@@ -10,9 +10,9 @@
 .markdown > :last-child { margin-bottom: 0; }
 .markdown p { margin: 0 0 12px; }
 .markdown h1, .markdown h2, .markdown h3 { color: #20272c; line-height: 1.35; font-weight: 700; }
-.markdown h1 { margin: 18px 0 8px; font-size: 17px; }
-.markdown h2 { margin: 16px 0 7px; font-size: 15px; }
-.markdown h3 { margin: 13px 0 6px; font-size: 14px; }
+.markdown h1 { margin: 18px 0 8px; font-size: 18px; }
+.markdown h2 { margin: 16px 0 7px; font-size: 16px; }
+.markdown h3 { margin: 13px 0 6px; font-size: 15px; }
 .markdown ul, .markdown ol { margin: 4px 0 12px; padding-left: 22px; }
 .markdown li { padding-left: 3px; margin: 3px 0; }
 .markdown a { color: #1769aa; text-decoration: underline; text-decoration-color: #a9cbea; text-underline-offset: 2px; }
@@ -21,9 +21,9 @@
 .markdown hr { margin: 15px 0; border: 0; border-top: 1px solid #e4e8ea; }
 .markdown strong { color: #20272c; font-weight: 700; }
 .inlineCode, .codeBlock { font-family: var(--font-mono); }
-.inlineCode { padding: 2px 5px; border: 1px solid #e1e5e7; border-radius: 5px; background: #f3f5f6; color: #4c5961; font-size: .9em; }
-.codeFrame { margin: 14px 0 16px; overflow: hidden; border-radius: 13px; background: #f3f3f3; color: #30353a; }
-.codeHeader { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 11px; color: #687077; font-size: 12px; line-height: 1; }
+.inlineCode { padding: 2px 6px; background: #f0f1f2; color: #4c5961; font-size: .88em; border-radius: 4px; }
+.codeFrame { margin: 12px 0 14px; overflow: hidden; border-radius: 10px; background: #f5f6f7; color: #30353a; }
+.codeHeader { display: flex; align-items: center; justify-content: space-between; min-height: 28px; padding: 0 10px; color: #687077; font-size: 11px; line-height: 1; }
 .copyButton { display: grid; place-items: center; min-width: 30px; min-height: 30px; padding: 0 5px; border: 0; border-radius: 7px; background: transparent; color: #7b8388; cursor: pointer; font: inherit; font-size: 12px; }
 .copyButton:hover { background: #e7e7e7; color: #30363b; }
 .codeFrame pre { margin: 0; padding: 7px 12px 12px; overflow-x: auto; background: transparent; color: inherit; }
