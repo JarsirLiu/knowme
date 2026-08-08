@@ -6,7 +6,7 @@ import {
   PrismaConversationRepository,
   type ConversationRepository,
 } from './conversation-repository.js'
-import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../chat/agent-runtime.js'
+import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import type { AnyTimelineEvent } from '@superagent/core'
 
 type PersistCompactionMessage = (sessionId: string, result: SessionCompactionResult) => Promise<unknown>

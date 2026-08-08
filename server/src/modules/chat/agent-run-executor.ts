@@ -6,6 +6,7 @@ import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import type { Session } from '@openai/agents'
 import { estimateTokens } from '../history/session-compaction.js'
+import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import { getToolCallId, persistRunStreamEvent, type StreamEventState } from './stream-event-mapper.js'
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
 import { PrismaAgentRunRepository, type AgentRunRepository } from '../runs/agent-run-repository.js'
@@ -30,6 +31,7 @@ export class AgentRunExecutor {
     private readonly runRepository: AgentRunRepository = new PrismaAgentRunRepository(),
     private readonly projectReader: ProjectReader = new ProjectService(),
     private readonly runtime: AgentRuntime = new DefaultAgentRuntime(),
+    private readonly sessionFactory: AgentSessionFactory = new DefaultAgentSessionFactory(),
   ) {}
 
   async execute(runId: string, signal: AbortSignal, resumed: boolean, leaseOwner: string): Promise<'completed' | 'waiting_approval'> {
@@ -42,7 +44,7 @@ export class AgentRunExecutor {
 
     const agent = await this.runtime.createAgent(project.rootPath)
     const sessionId = await this.conversationService.getSessionId(conversation.id)
-    const session = this.runtime.createSession(sessionId, {
+    const session = this.sessionFactory.createSession(sessionId, {
       started: async ({ id, trigger }) => {
         await this.emit(conversation.id, runId, 'context_compaction.started', { id, trigger }, leaseOwner)
       },

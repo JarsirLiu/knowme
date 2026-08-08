@@ -12,6 +12,7 @@ import type {
   SessionCompactionResult,
   SessionCompactionTrigger,
 } from './session-compaction.js'
+import { loadSessionCompactionOptions } from './session-compaction.js'
 import { SessionCompactionService } from './session-compaction.js'
 import {
   PrismaSessionCompactionRepository,
@@ -67,5 +68,19 @@ export class PrismaAgentSession implements Session {
 
   async runCompaction(): Promise<null> {
     return this.compactionCoordinator.runAutoCompaction()
+  }
+}
+
+export type CompactionSession = Session & {
+  compact(trigger: SessionCompactionTrigger): Promise<SessionCompactionResult>
+}
+
+export interface AgentSessionFactory {
+  createSession(sessionId: string, observer: CompactionObserver): CompactionSession
+}
+
+export class DefaultAgentSessionFactory implements AgentSessionFactory {
+  createSession(sessionId: string, observer: CompactionObserver) {
+    return new PrismaAgentSession(sessionId, loadSessionCompactionOptions(), observer)
   }
 }

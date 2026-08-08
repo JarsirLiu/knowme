@@ -20,6 +20,7 @@ import { RunCoordinator } from './runs/run-coordinator.js'
 import { PrismaAgentRunRepository } from './runs/agent-run-repository.js'
 import { AgentRunExecutor } from './chat/agent-run-executor.js'
 import { DefaultAgentRuntime } from './chat/agent-runtime.js'
+import { DefaultAgentSessionFactory } from './history/agent-session-store.js'
 import { TimelineEventHub } from './events/timeline-event-hub.js'
 import { PrismaConversationRepository } from './conversations/conversation-repository.js'
 import { LegacyTimelineMigration } from './conversations/legacy-timeline-migration.js'
@@ -43,6 +44,7 @@ export function registerRoutes(app: FastifyInstance) {
   const approvalService = new ApprovalService(new PrismaApprovalRepository())
   const deviceService = new DeviceService()
   const agentRunRepository = new PrismaAgentRunRepository(sessionLifecycleRepository)
+  const agentSessionFactory = new DefaultAgentSessionFactory()
   const agentExecutor = new AgentRunExecutor(
     conversationService,
     approvalService,
@@ -50,6 +52,7 @@ export function registerRoutes(app: FastifyInstance) {
     agentRunRepository,
     projectService,
     new DefaultAgentRuntime(),
+    agentSessionFactory,
   )
   const coordinator = new RunCoordinator(
     conversationService,
