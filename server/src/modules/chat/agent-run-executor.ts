@@ -11,6 +11,7 @@ import { getToolCallId, persistRunStreamEvent, type StreamEventState } from './s
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
 import { PrismaAgentRunRepository, type AgentRunRepository } from '../runs/agent-run-repository.js'
 import { ProjectService } from '../projects/project.service.js'
+import { seedBuiltinSkills } from '../projects/builtin-skills.js'
 
 type PersistedRunState = RunState<unknown, CodingAgentInstance>
 type RunInput = string | PersistedRunState
@@ -41,6 +42,7 @@ export class AgentRunExecutor {
 
     const conversation = await this.conversationService.get(agentRun.conversationId)
     const project = await this.projectReader.get(conversation.projectId)
+    await seedBuiltinSkills(project.rootPath).catch(() => undefined)
 
     const agent = await this.runtime.createAgent(project.rootPath)
     const sessionId = await this.conversationService.getSessionId(conversation.id)

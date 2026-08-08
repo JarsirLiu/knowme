@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SkillInfo } from '@superagent/core'
-import { buildCommandList, SKILL_CREATOR_PROMPT, type CmdItem } from './commands'
+import { buildCommandList, type CmdItem } from './commands'
 import { CommandMenu } from './components/CommandMenu'
 import styles from './InputBar.module.css'
 
@@ -61,12 +61,6 @@ export function InputBar({
       textareaRef.current?.focus()
       return
     }
-    if (cmd.type === 'system' && cmd.label === '/makeskill') {
-      onChange(SKILL_CREATOR_PROMPT)
-      setShowCommands(false)
-      textareaRef.current?.focus()
-      return
-    }
     const cursor = textareaRef.current?.selectionStart ?? value.length
     const before = value.slice(0, cursor)
     const after = value.slice(cursor)
@@ -75,6 +69,13 @@ export function InputBar({
     const newValue = newBefore + cmd.insert + ' ' + after
     onChange(newValue)
     setShowCommands(false)
+    if (cmd.selectFrom !== undefined) {
+      const from = newBefore.length + cmd.selectFrom
+      requestAnimationFrame(() => {
+        const el = textareaRef.current
+        if (el) el.setSelectionRange(from, newValue.length)
+      })
+    }
     textareaRef.current?.focus()
   }
 
