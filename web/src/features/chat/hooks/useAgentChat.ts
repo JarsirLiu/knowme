@@ -15,6 +15,23 @@ const INITIAL_STATE: ChatState = {
   error: null,
 }
 
+function persistedConversationId(target: ActiveConversation | null): string | undefined {
+  return target?.kind === 'persisted' ? target.conversationId : undefined
+}
+
+function buildStatusMap(
+  states: Record<string, ChatState>,
+): Record<string, ConversationRuntimeStatus | 'error'> {
+  return Object.fromEntries(
+    Object.entries(states)
+      .filter(([key]) => key.startsWith('conversation:'))
+      .map(([key, chatState]) => [
+        key.replace(/^conversation:/, ''),
+        chatState.error ? 'error' : chatState.runtimeStatus,
+      ]),
+  )
+}
+
 export function useAgentChat(
   client: ChatClient,
   target: ActiveConversation | null,
@@ -51,16 +68,17 @@ export function useAgentChat(
       subscribeConversation(conversationId)
       subscribed.add(conversationId)
     }
-    if (target?.kind === 'persisted') {
-      subscribeConversation(target.conversationId)
-      subscribed.add(target.conversationId)
+    const persistedId = persistedConversationId(target)
+    if (persistedId) {
+      subscribeConversation(persistedId)
+      subscribed.add(persistedId)
     }
     return () => {
       for (const conversationId of subscribed) {
         disposeConversation(conversationId)
       }
     }
-  }, [activeConversationIds, subscribeConversation, disposeConversation, target?.kind === 'persisted' ? target?.conversationId : undefined])
+  }, [activeConversationIds, subscribeConversation, disposeConversation, target])
 
   const state = states[targetKey] ?? INITIAL_STATE
 
@@ -72,26 +90,6 @@ export function useAgentChat(
     const key = targetKey
     const currentState = statesRef.current[key] ?? INITIAL_STATE
     if (currentState.requestPending || currentState.isLoading || currentState.isCompacting) return
-
-    if (trimmed === '/compact') {
-      const conversationId = activeTarget?.kind === 'persisted' ? activeTarget.conversationId : undefined
-      if (!conversationId) return
-      dispatchFor(key, { type: 'COMPACTION_REQUEST' })
-      try {
-        const result = await client.compactContext(conversationId)
-        for (const event of result.events ?? []) {
-          dispatchFor(key, { type: 'TIMELINE_EVENT', event })
-        }
-        dispatchFor(key, { type: 'COMPACTION_END' })
-      } catch (error) {
-        dispatchFor(key, {
-          type: 'ERROR',
-          message: error instanceof Error ? error.message : String(error),
-          runtimeStatus: currentState.runtimeStatus,
-        })
-      }
-      return
-    }
 
     if (!activeTarget) {
       dispatchFor(key, { type: 'ERROR', message: '请先添加或选择一个项目', runtimeStatus: 'idle' })
@@ -126,11 +124,10 @@ export function useAgentChat(
   }, [clearStateFor, client, dispatchFor, onConversationCreated, subscribeConversation, target, targetKey])
 
   const compactContext = useCallback(async () => {
-    const activeTarget = target
     const key = targetKey
     const currentState = statesRef.current[key] ?? INITIAL_STATE
     if (currentState.isCompacting) return
-    const conversationId = activeTarget?.kind === 'persisted' ? activeTarget.conversationId : undefined
+    const conversationId = persistedConversationId(target)
     if (!conversationId) return
 
     dispatchFor(key, { type: 'COMPACTION_REQUEST' })
@@ -150,7 +147,7 @@ export function useAgentChat(
   }, [client, dispatchFor, target, targetKey])
 
   const approveTool = useCallback(async (toolCallId: string) => {
-    const conversationId = target?.kind === 'persisted' ? target.conversationId : undefined
+    const conversationId = persistedConversationId(target)
     if (!conversationId) return
     try {
       await client.approveToolCall(conversationId, toolCallId)
@@ -160,7 +157,7 @@ export function useAgentChat(
   }, [client, dispatchFor, target, targetKey])
 
   const denyTool = useCallback(async (toolCallId: string) => {
-    const conversationId = target?.kind === 'persisted' ? target.conversationId : undefined
+    const conversationId = persistedConversationId(target)
     if (!conversationId) return
     try {
       await client.denyToolCall(conversationId, toolCallId)
@@ -170,7 +167,7 @@ export function useAgentChat(
   }, [client, dispatchFor, target, targetKey])
 
   const stop = useCallback(() => {
-    const conversationId = target?.kind === 'persisted' ? target.conversationId : undefined
+    const conversationId = persistedConversationId(target)
     const activeRun = [...state.entries].reverse().find((entry) => entry.type === 'turn' && (
       entry.turn.assistantMessage.status === 'streaming' || entry.turn.assistantMessage.status === 'waiting_approval'))
     if (conversationId && activeRun?.type === 'turn') {
@@ -179,14 +176,7 @@ export function useAgentChat(
     dispatchFor(targetKey, { type: 'CANCEL' })
   }, [client, dispatchFor, state.entries, target, targetKey])
 
-  const statusByConversation: Record<string, ConversationRuntimeStatus | 'error'> = Object.fromEntries(
-    Object.entries(states)
-      .filter(([key]) => key.startsWith('conversation:'))
-      .map(([key, chatState]) => [
-        key.replace(/^conversation:/, ''),
-        chatState.error ? 'error' : chatState.runtimeStatus,
-      ]),
-  )
+  const statusByConversation = buildStatusMap(states)
 
   return {
     entries: state.entries,

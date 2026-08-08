@@ -5,6 +5,7 @@ import { useUIStore } from '@/stores/ui'
 import { client } from '@/api/client'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
+import type { SkillInfo } from '@superagent/core'
 import styles from './ChatPage.module.css'
 
 export default function ChatPage() {
@@ -12,6 +13,7 @@ export default function ChatPage() {
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null)
   const [creatingProject, setCreatingProject] = useState(false)
+  const [skills, setSkills] = useState<SkillInfo[]>([])
 
   const active = useWorkspaceStore((state) => state.active)
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
@@ -37,6 +39,7 @@ export default function ChatPage() {
     isLoading,
     error,
     sendMessage,
+    compactContext,
     approveTool,
     denyTool,
     stop,
@@ -46,6 +49,19 @@ export default function ChatPage() {
   useEffect(() => {
     setConversationRuntimeStatuses(statusByConversation)
   }, [statusByConversation, setConversationRuntimeStatuses])
+
+  const activeProjectId = active?.projectId
+  useEffect(() => {
+    if (!activeProjectId) {
+      setSkills([])
+      return
+    }
+    let cancelled = false
+    void client.getProjectSkills(activeProjectId)
+      .then((list) => { if (!cancelled) setSkills(list) })
+      .catch(() => { if (!cancelled) setSkills([]) })
+    return () => { cancelled = true }
+  }, [activeProjectId])
 
   const handleNewProject = useCallback(() => {
     setSelectedDirectory(null)
@@ -82,13 +98,18 @@ export default function ChatPage() {
   const handleSend = useCallback(() => {
     const text = input.trim()
     if (!text) return
+    if (text === '/compact') {
+      setInput('')
+      void compactContext()
+      return
+    }
     if (!active) {
       setProjectModalOpen(true)
       return
     }
     setInput('')
     void sendMessage(text)
-  }, [active, input, sendMessage])
+  }, [active, input, sendMessage, compactContext])
 
   const activeTitle = active?.kind === 'persisted'
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
@@ -112,8 +133,10 @@ export default function ChatPage() {
         onChange={setInput}
         onSend={handleSend}
         onStop={stop}
+        onCompact={compactContext}
         isLoading={isLoading}
         placeholder="Do anything"
+        skills={skills}
       />
 
       <ProjectModal

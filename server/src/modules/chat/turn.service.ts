@@ -1,4 +1,5 @@
 import type { FastifyReply } from 'fastify'
+import { randomUUID } from 'node:crypto'
 import { setupSSEHeaders, sendSSE } from '../../utils/sse.js'
 import type { AnyTimelineEvent } from '@superagent/core'
 import { ConversationService } from '../conversations/conversation.service.js'
@@ -22,13 +23,14 @@ export class TurnService {
   async handleTurn(
     target: TurnTarget,
     message: string,
-    clientMessageId: string,
+    clientMessageId: string | undefined,
     reply: FastifyReply,
   ) {
     if (!message.trim()) return reply.status(400).send({ error: 'Message cannot be empty' })
+    const id = clientMessageId ?? randomUUID()
     const turn = target.projectId
-      ? await this.conversationService.startTurn({ projectId: target.projectId, message, clientMessageId })
-      : await this.conversationService.continueTurn({ conversationId: target.conversationId!, message, clientMessageId })
+      ? await this.conversationService.startTurn({ projectId: target.projectId, message, clientMessageId: id })
+      : await this.conversationService.continueTurn({ conversationId: target.conversationId!, message, clientMessageId: id })
 
     if (turn.created) await this.coordinator.enqueue(turn.run.id)
     return reply.send({

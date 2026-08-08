@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import { randomUUID } from 'node:crypto'
 import type { TurnService } from '../chat/turn.service.js'
 import type { ConversationService } from './conversation.service.js'
 import { ConversationHasActiveRunError } from './conversation-errors.js'
@@ -40,7 +39,7 @@ export function registerConversationRoutes(
     return turnService.handleTurn(
       { conversationId },
       body?.message?.trim() ?? '',
-      body?.clientMessageId ?? randomUUID(),
+      body?.clientMessageId,
       reply,
     )
   })

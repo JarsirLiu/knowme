@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { SkillInfo } from '@superagent/core'
+import { buildCommandList, type CmdItem } from './commands'
+import { CommandMenu } from './components/CommandMenu'
 import styles from './InputBar.module.css'
 
 type InputBarProps = {
@@ -6,8 +9,10 @@ type InputBarProps = {
   onChange: (v: string) => void
   onSend: () => void
   onStop?: () => void
+  onCompact?: () => void
   isLoading: boolean
   placeholder?: string
+  skills?: SkillInfo[]
 }
 
 export function InputBar({
@@ -15,11 +20,28 @@ export function InputBar({
   onChange,
   onSend,
   onStop,
+  onCompact,
   isLoading,
   placeholder = '随心输入',
+  skills = [],
 }: InputBarProps) {
   const [focused, setFocused] = useState(false)
+  const [showCommands, setShowCommands] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [commandFilter, setCommandFilter] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const allCommands = useMemo<CmdItem[]>(() => buildCommandList(skills), [skills])
+
+  const filtered = useMemo(() => {
+    if (!commandFilter) return allCommands
+    const lower = commandFilter.toLowerCase()
+    return allCommands.filter((c) => c.label.toLowerCase().includes(lower))
+  }, [allCommands, commandFilter])
+
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [filtered.length])
 
   useEffect(() => {
     const textarea = textareaRef.current
@@ -28,7 +50,68 @@ export function InputBar({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
   }, [value])
 
+  const selectCommand = (cmd: CmdItem) => {
+    if (cmd.type === 'system' && cmd.label === '/compact') {
+      onCompact?.()
+      setShowCommands(false)
+      textareaRef.current?.focus()
+      return
+    }
+    const cursor = textareaRef.current?.selectionStart ?? value.length
+    const before = value.slice(0, cursor)
+    const after = value.slice(cursor)
+    const slashIdx = before.lastIndexOf('/')
+    const newBefore = slashIdx >= 0 ? before.slice(0, slashIdx) : before
+    const newValue = newBefore + cmd.insert + ' ' + after
+    onChange(newValue)
+    setShowCommands(false)
+    textareaRef.current?.focus()
+  }
+
+  const handleChange = (v: string) => {
+    onChange(v)
+    const cursor = textareaRef.current?.selectionStart ?? v.length
+    const before = v.slice(0, cursor)
+    const slashIdx = before.lastIndexOf('/')
+    if (slashIdx >= 0) {
+      const afterSlash = before.slice(slashIdx + 1)
+      if (!afterSlash.includes(' ')) {
+        setCommandFilter(afterSlash)
+        setShowCommands(true)
+        setSelectedIndex(0)
+      } else {
+        setShowCommands(false)
+      }
+    } else {
+      setShowCommands(false)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showCommands) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        if (filtered[selectedIndex]) {
+          selectCommand(filtered[selectedIndex])
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowCommands(false)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (value.trim()) onSend()
@@ -39,12 +122,20 @@ export function InputBar({
 
   return (
     <div className={styles.inputBarWrap}>
+      <CommandMenu
+        commands={filtered}
+        show={showCommands}
+        selectedIndex={selectedIndex}
+        onSelect={selectCommand}
+        onClose={() => setShowCommands(false)}
+        onSelectedIndexChange={setSelectedIndex}
+      />
       <div className={`${styles.inputBar} ${focused ? styles.inputBarFocused : ''}`}>
         <textarea
           ref={textareaRef}
           className={styles.inputTextarea}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}

@@ -1,8 +1,8 @@
 import type { AgentRun, Conversation } from '@prisma/client'
-import type { ConversationRuntimeStatus } from '@superagent/core'
 import { prisma } from '../../db/client.js'
 import { appendTimelineEvent } from '../events/timeline-event-store.js'
 import { ConversationHasActiveRunError } from './conversation-errors.js'
+import { titleFromMessage, withRuntimeStatus } from './conversation-domain.js'
 import {
   PrismaAgentSessionLifecycleRepository,
   type AgentSessionLifecycleRepository,
@@ -209,28 +209,3 @@ export class PrismaConversationRepository implements ConversationRepository {
 }
 
 const ACTIVE_RUN_STATUSES = ['queued', 'running', 'waiting_approval']
-
-function withRuntimeStatus(
-  conversation: Omit<Conversation, 'runs'>,
-  runs: Array<{ status: string }>,
-) {
-  return {
-    ...conversation,
-    runtimeStatus: runtimeStatusForRuns(runs),
-  }
-}
-
-function runtimeStatusForRuns(runs: Array<{ status: string }>): ConversationRuntimeStatus {
-  if (runs.some((run) => run.status === 'running')) return 'running'
-  if (runs.some((run) => run.status === 'waiting_approval')) return 'waiting_approval'
-  if (runs.some((run) => run.status === 'queued')) return 'queued'
-  const latest = runs[0]?.status
-  if (latest === 'failed' || latest === 'interrupted' || latest === 'cancelled') return latest
-  return 'idle'
-}
-
-function titleFromMessage(message: string): string {
-  const title = message.replace(/\s+/g, ' ').trim()
-  if (!title) return 'New Task'
-  return title.length > 64 ? `${title.slice(0, 61)}...` : title
-}

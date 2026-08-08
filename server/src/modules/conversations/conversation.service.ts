@@ -1,6 +1,5 @@
-import {
-  persistCompactionMessage,
-} from '../history/session-compaction.js'
+import type { SessionCompactionResult } from '../history/compaction-policy.js'
+import { persistCompactionMessage } from '../history/session-compaction.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import { LegacyTimelineMigration } from './legacy-timeline-migration.js'
 import {
@@ -8,6 +7,9 @@ import {
   type ConversationRepository,
 } from './conversation-repository.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../chat/agent-runtime.js'
+import type { AnyTimelineEvent } from '@superagent/core'
+
+type PersistCompactionMessage = (sessionId: string, result: SessionCompactionResult) => Promise<unknown>
 
 export class ConversationService {
   constructor(
@@ -15,6 +17,7 @@ export class ConversationService {
     private readonly repository: ConversationRepository = new PrismaConversationRepository(),
     private readonly legacyTimelineMigration: LegacyTimelineMigration = new LegacyTimelineMigration(),
     private readonly sessionFactory: AgentSessionFactory = new DefaultAgentSessionFactory(),
+    private readonly compactionPersister: PersistCompactionMessage = persistCompactionMessage,
   ) {}
 
   async list(projectId: string) {
@@ -82,24 +85,46 @@ export class ConversationService {
 
   async compactContext(id: string) {
     const conversation = await this.get(id)
+    this.assertCanCompact(conversation, id)
+    await this.assertNoActiveRun(id)
+
+    const sessionId = await this.getSessionId(id)
+    const events: AnyTimelineEvent[] = []
+    const session = this.buildCompactionSession(id, sessionId, events)
+    const result = await session.compact('manual')
+    if (result.status !== 'compacted') return { ...result, events }
+
+    await this.compactionPersister(sessionId, result)
+    await this.repository.touch(id)
+    return { ...result, events }
+  }
+
+  private assertCanCompact(conversation: { status: string }, id: string): void {
     if (conversation.status !== 'active') {
       throw new Error(`Conversation is not active: ${id}`)
     }
+  }
+
+  private async assertNoActiveRun(id: string): Promise<void> {
     if (await this.repository.hasActiveRun(id)) {
       throw new Error('Cannot compact context while a run is active')
     }
+  }
 
-    const sessionId = await this.getSessionId(id)
-    const events: import('@superagent/core').AnyTimelineEvent[] = []
-    const session = this.sessionFactory.createSession(sessionId, {
+  private buildCompactionSession(
+    conversationId: string,
+    sessionId: string,
+    events: AnyTimelineEvent[],
+  ) {
+    return this.sessionFactory.createSession(sessionId, {
       started: async ({ id: compactionId, trigger }) => {
-        events.push(await this.timelineStore.append(id, null, 'context_compaction.started', {
+        events.push(await this.timelineStore.append(conversationId, null, 'context_compaction.started', {
           id: compactionId,
           trigger,
         }))
       },
       completed: async ({ id: compactionId, trigger, result }) => {
-        events.push(await this.timelineStore.append(id, null, 'context_compaction.completed', {
+        events.push(await this.timelineStore.append(conversationId, null, 'context_compaction.completed', {
           id: compactionId,
           trigger,
           compactedItems: result.compactedItems,
@@ -108,18 +133,13 @@ export class ConversationService {
         }))
       },
       failed: async ({ id: compactionId, trigger, error }) => {
-        events.push(await this.timelineStore.append(id, null, 'context_compaction.failed', {
+        events.push(await this.timelineStore.append(conversationId, null, 'context_compaction.failed', {
           id: compactionId,
           trigger,
           error,
         }))
       },
     })
-    const result = await session.compact('manual')
-    if (result.status !== 'compacted') return { ...result, events }
-    await persistCompactionMessage(sessionId, result)
-    await this.repository.touch(id)
-    return { ...result, events }
   }
 
   getSessionId(conversationId: string) {

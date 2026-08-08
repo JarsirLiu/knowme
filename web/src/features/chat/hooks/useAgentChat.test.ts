@@ -45,24 +45,7 @@ function draftTarget(projectId = 'project-1'): ActiveConversation & { draftId: s
 }
 
 describe('useAgentChat', () => {
-  it('sendMessage routes /compact to client.compactContext', async () => {
-    const client = createMockClient()
-    client.compactContext.mockResolvedValue({ status: 'compacted', compactedItems: 3, keptItems: 10, events: [] })
-    const onConversationCreated = vi.fn()
-
-    const { result } = renderHook(() =>
-      useAgentChat(client, persistedTarget('conv-1'), [], onConversationCreated),
-    )
-
-    await act(async () => {
-      await result.current.sendMessage('/compact')
-    })
-
-    expect(client.compactContext).toHaveBeenCalledWith('conv-1')
-    expect(result.current.isCompacting).toBe(false)
-  })
-
-  it('sendMessage with draft calls startDraftTurn and fires onConversationCreated', async () => {
+  it('sendMessage routes to client.startDraftTurn for draft targets', async () => {
     const client = createMockClient()
     const target = draftTarget()
     client.startDraftTurn.mockResolvedValue({
@@ -213,6 +196,24 @@ describe('useAgentChat', () => {
 
     expect(result.current.error).toBe('Network error')
     expect(result.current.isLoading).toBe(false)
+  })
+
+  it('compactContext calls client.compactContext and dispatches events', async () => {
+    const client = createMockClient()
+    const event = { type: 'context_compaction.completed', id: 'evt-1', sequence: 1, conversationId: 'conv-1', runId: null, createdAt: '', data: { id: 'comp-1', trigger: 'manual', compactedItems: 3, keptItems: 10 } }
+    client.compactContext.mockResolvedValue({ status: 'compacted', compactedItems: 3, keptItems: 10, events: [event] })
+    const onConversationCreated = vi.fn()
+
+    const { result } = renderHook(() =>
+      useAgentChat(client, persistedTarget('conv-1'), [], onConversationCreated),
+    )
+
+    await act(async () => {
+      await result.current.compactContext()
+    })
+
+    expect(client.compactContext).toHaveBeenCalledWith('conv-1')
+    expect(result.current.isCompacting).toBe(false)
   })
 
   it('compactContext handles client errors gracefully', async () => {
