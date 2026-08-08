@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SkillInfo } from '@superagent/core'
-import { buildCommandList, type CmdItem } from './commands'
+import { buildCommandList, SKILL_CREATOR_PROMPT, type CmdItem } from './commands'
 import { CommandMenu } from './components/CommandMenu'
 import styles from './InputBar.module.css'
 
@@ -43,16 +43,26 @@ export function InputBar({
     setSelectedIndex(0)
   }, [filtered.length])
 
-  useEffect(() => {
+  const autoResize = useCallback(() => {
     const textarea = textareaRef.current
     if (!textarea) return
     textarea.style.height = '0px'
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
-  }, [value])
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 132)}px`
+  }, [])
+
+  useEffect(() => {
+    autoResize()
+  }, [value, autoResize])
 
   const selectCommand = (cmd: CmdItem) => {
     if (cmd.type === 'system' && cmd.label === '/compact') {
       onCompact?.()
+      setShowCommands(false)
+      textareaRef.current?.focus()
+      return
+    }
+    if (cmd.type === 'system' && cmd.label === '/makeskill') {
+      onChange(SKILL_CREATOR_PROMPT)
       setShowCommands(false)
       textareaRef.current?.focus()
       return
@@ -70,6 +80,7 @@ export function InputBar({
 
   const handleChange = (v: string) => {
     onChange(v)
+    autoResize()
     const cursor = textareaRef.current?.selectionStart ?? v.length
     const before = v.slice(0, cursor)
     const slashIdx = before.lastIndexOf('/')

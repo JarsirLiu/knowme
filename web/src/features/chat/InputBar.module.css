@@ -36,6 +36,20 @@
 
 .commandItemActive { background: #eef2f4; }
 
+.commandGroupHeader {
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8a939b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.commandGroupHeader:not(:first-child) {
+  border-top: 1px solid #eef2f4;
+  margin-top: 4px;
+}
+
 .commandLabelSystem {
   font-size: 14px;
   font-weight: 600;
@@ -94,7 +108,7 @@
 .plusButton:hover { background: #eef2f4; }
 
 .inputTextarea {
-  flex: 1;
+  flex: 1 1 auto;
   width: 100%;
   border: none;
   background: transparent;
@@ -105,7 +119,7 @@
   line-height: 1.5;
   padding: 4px 2px;
   font-family: var(--font-sans);
-  max-height: 200px;
+  max-height: 132px;
 }
 
 .inputTextarea::placeholder { color: var(--color-muted-soft); }
