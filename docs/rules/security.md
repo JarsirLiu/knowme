@@ -11,4 +11,9 @@ SuperAgent 可以读写本地项目并执行 Shell，因此安全边界属于架
   处执行。
 - 设备的 endpoint、apiKey 等敏感信息不能在日志、Timeline 或模型上下文中明文
   暴露。
+- Skill 文件只能写入 `workspace/.superagent/skills/` 目录，由 frontmatter 校验
+  `name` 和 `description` 必填字段，`name` 不超过 64 字符，`description` 不超过 1024 字符，
+  避免目录穿越或恶意覆盖。
+- `install_skill` 工具只接受 HTTP(S) URL，下载后验证 JSON 结构再写入磁盘，防止
+  任意文件写入。Skill 注入仅在用户消息中显式提及 `$skill-name` 时触发，不自动注入所有 skill。
 - 修改工具权限时，必须补充权限边界测试，并更新 current 文档。

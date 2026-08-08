@@ -8,6 +8,7 @@ import { DeviceService } from './devices/device.service.js'
 import { registerDeviceRoutes } from './devices/device.routes.js'
 import { TimelineEventStore } from './events/timeline-event-store.js'
 import { ProjectService } from './projects/project.service.js'
+import { SkillService } from './projects/skill.service.js'
 import { PrismaProjectRepository } from './projects/project-repository.js'
 import { ProjectPathValidator } from './projects/project-path-validator.js'
 import { registerProjectRoutes } from './projects/project.routes.js'
@@ -64,7 +65,7 @@ export function registerRoutes(app: FastifyInstance) {
   app.addHook('onClose', async () => coordinator.stop())
 
   registerDirectoryRoutes(app, directoryService)
-  registerProjectRoutes(app, projectService, conversationService, turnService)
+  registerProjectRoutes(app, projectService, conversationService, turnService, new SkillService(projectService))
   registerConversationRoutes(app, conversationService, turnService)
   registerApprovalRoutes(app, approvalService, coordinator)
   registerDeviceRoutes(app, deviceService)

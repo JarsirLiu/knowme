@@ -34,6 +34,25 @@ React Web
 Chat Completions provider，并使用配置的 `baseURL` 连接兼容端点。工具以 workspace
 为安全边界。该包不应该知道 Conversation、AgentRun、SQLite 或 HTTP 请求。
 
+### Skill 系统（`packages/agent/src/skills/`）
+
+Skill 是 `packages/agent` 内置的本地扩展机制，允许通过 `workspace/.superagent/skills/<id>/` 目录
+注入额外的 instructions 和工具。Skill 采用 `SKILL.md` 格式（YAML frontmatter + Markdown 正文），
+对齐 Codex 的 skill 约定。
+
+- 格式：每个 skill 目录包含一个 `SKILL.md`，frontmatter 提供 `name`、`description`、`version`，
+  正文是模型执行的指令。可选目录 `references/`（参考文档）和 `scripts/`（可执行脚本）。
+- 按需注入：`createCodingAgent` 不再把所有 skill 注入 prompt。用户在消息中使用 `$skill-name`
+  显式提及某个 skill 时，`AgentRunExecutor` 会解析提及、加载对应 `SKILL.md`，并把指令以
+  `<skill></skill>` 片段注入该次输入；未提及的 skill 不进入上下文。
+- 管理工具：`createSkillTools()` 生成四个工具（`list_skills`、`install_skill`、`create_skill`、
+  `read_skill_reference`），挂载到主 Agent 的 `tools` 数组，使模型能在运行时自行管理 skill。
+- 生效时机：skill 在每次 turn 由 `AgentRunExecutor` 加载（`loadSkills`）。新安装或创建的 skill
+  需要等到下一次 turn 才生效。
+- 依赖方向：skill 系统只依赖 `packages/agent` 内部的 `skill/parser`、`mention` 和 `node:fs`，
+  不依赖 server、core 或 client。`AgentRunExecutor` 通过 `@superagent/agent` 导出的
+  `resolveMentions`/`loadSkills` 接入提及解析。
+
 ### `packages/client`
 
 封装 API 请求、响应解析、SSE 订阅、断线重连和客户端错误。Web 不应自行拼接

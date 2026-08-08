@@ -7,6 +7,18 @@ export interface Project {
   updatedAt: string
 }
 
+export interface SkillInfo {
+  name: string
+  description: string
+  version: string
+  hasReferences: boolean
+  hasScripts: boolean
+}
+
+export interface SkillsListResponse {
+  skills: SkillInfo[]
+}
+
 export type ConversationRuntimeStatus =
   | 'idle'
   | 'queued'

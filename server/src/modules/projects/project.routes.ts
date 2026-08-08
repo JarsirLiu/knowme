@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto'
 import type { TurnService } from '../chat/turn.service.js'
 import type { ConversationService } from '../conversations/conversation.service.js'
 import type { ProjectService } from './project.service.js'
+import type { SkillService } from './skill.service.js'
 
 export function registerProjectRoutes(
   app: FastifyInstance,
   projectService: ProjectService,
   conversationService: ConversationService,
   turnService: TurnService,
+  skillService?: SkillService,
 ) {
 app.get('/api/projects', async (_req, reply) => {
     const projects = await projectService.list()
@@ -40,4 +42,12 @@ app.get('/api/projects', async (_req, reply) => {
       reply,
     )
   })
+
+  if (skillService) {
+    app.get('/api/projects/:projectId/skills', async (req, reply) => {
+      const { projectId } = req.params as { projectId: string }
+      const skills = await skillService.listForProject(projectId)
+      return reply.send({ skills })
+    })
+  }
 }

@@ -3,6 +3,8 @@ export type {
   Project,
   Conversation,
   ConversationRuntimeStatus,
+  SkillInfo,
+  SkillsListResponse,
 } from './project.js'
 export type { StartTurnResult } from './run.js'
 export type { MessageRole, MessageContent, TextContent, ReasoningContent, ToolSummary, Message } from './message.js'

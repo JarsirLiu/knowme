@@ -1,5 +1,6 @@
 import { run, RunState, user, type Agent, type RunStreamEvent } from '@openai/agents'
 import { buildEnvironmentContext, buildTimeReminder } from '@superagent/agent'
+import { resolveMentions, loadSkills, SKILL_FILENAME } from '@superagent/agent'
 import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
@@ -39,7 +40,7 @@ export class AgentRunExecutor {
     const conversation = await this.conversationService.get(agentRun.conversationId)
     const project = await this.projectReader.get(conversation.projectId)
 
-    const agent = this.runtime.createAgent(project.rootPath)
+    const agent = await this.runtime.createAgent(project.rootPath)
     const sessionId = await this.conversationService.getSessionId(conversation.id)
     const session = this.runtime.createSession(sessionId, {
       started: async ({ id, trigger }) => {
@@ -61,7 +62,12 @@ export class AgentRunExecutor {
 
     const loaded = await this.loadInput(agent, agentRun.input, agentRun.state)
     const state = loaded instanceof RunState ? await this.applyApprovals(agentRun.id, conversation.id, loaded, leaseOwner) : undefined
-    const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + loaded
+    const message = loaded instanceof RunState ? '' : loaded
+    const { mentioned, cleaned } = resolveMentions(message, await loadSkills(project.rootPath))
+    const skillBlock = mentioned.length > 0
+      ? mentioned.map((s) => `<skill>\n<name>${s.frontmatter.name}</name>\n<path>${s.dir}\\${SKILL_FILENAME}</path>\n${s.body}\n</skill>`).join('\n\n') + '\n\n'
+      : ''
+    const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + skillBlock + cleaned
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
     let stream: AgentStream | undefined
     try {

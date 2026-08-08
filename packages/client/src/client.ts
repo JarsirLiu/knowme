@@ -14,6 +14,8 @@ import type {
   StartTurnRequest,
   SSEEvent,
   StartTurnResult,
+  SkillInfo,
+  SkillsListResponse,
 } from '@superagent/core'
 import { parseSSEStream } from './sse-parser.js'
 import { SuperagentClientError } from './errors.js'
@@ -56,6 +58,12 @@ export class SuperagentClient {
     const res = await this.fetch(`/api/projects/${projectId}/conversations`)
     const data = (await res.json()) as ConversationListResponse
     return data.conversations
+  }
+
+  async getProjectSkills(projectId: string): Promise<SkillInfo[]> {
+    const res = await this.fetch(`/api/projects/${projectId}/skills`)
+    const data = (await res.json()) as SkillsListResponse
+    return data.skills
   }
 
   async getTimeline(conversationId: string): Promise<ConversationTimelineResponse> {

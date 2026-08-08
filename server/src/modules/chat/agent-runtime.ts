@@ -19,7 +19,7 @@ export interface AgentSessionFactory {
 }
 
 export interface AgentRuntime {
-  createAgent(workspace: string): CodingAgentInstance
+  createAgent(workspace: string): Promise<CodingAgentInstance>
   createSession(sessionId: string, observer: CompactionObserver): Session
 }
 
@@ -32,8 +32,9 @@ export class DefaultAgentSessionFactory implements AgentSessionFactory {
 export class DefaultAgentRuntime implements AgentRuntime {
   private readonly sessionFactory = new DefaultAgentSessionFactory()
 
-  createAgent(workspace: string) {
-    return createCodingAgent({ workspace }).agent
+  async createAgent(workspace: string) {
+    const { agent } = await createCodingAgent({ workspace })
+    return agent
   }
 
   createSession(sessionId: string, observer: CompactionObserver) {

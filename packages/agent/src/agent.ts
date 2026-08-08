@@ -4,6 +4,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { loadConfig } from './config.js'
 import { createReadOnlyTools, createReviewTools, createTools } from './tools/index.js'
 import { getInstructions, getExplorerInstructions, getReviewerInstructions } from './instructions.js'
+import { createSkillTools } from './skills/index.js'
 
 
 export interface CodingAgent {
@@ -30,7 +31,7 @@ function createTimedFetch(timeoutMs: number): typeof fetch {
   }
 }
 
-export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfig>> = {}): CodingAgent {
+export async function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfig>> = {}): Promise<CodingAgent> {
   const cfg = { ...loadConfig(), ...overrides }
 
   setTracingDisabled(true)
@@ -59,7 +60,9 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
   })
 
   const tools = createTools(cfg)
+
   const instructions = getInstructions()
+  const skillManagerTools = createSkillTools(cfg.workspace)
 
   const agent = new Agent({
     name: 'SuperAgent',
@@ -67,6 +70,7 @@ export function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfi
     instructions,
     tools: [
       ...tools,
+      ...skillManagerTools,
       explorerAgent.asTool({
         toolName: 'explore_project',
         toolDescription:
