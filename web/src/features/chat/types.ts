@@ -25,7 +25,13 @@ export interface ToolCall {
   status: ToolCallStatus
   result?: unknown
   error?: string
+  subEvents?: SubAgentEvent[]
 }
+
+export type SubAgentEvent =
+  | { type: 'reasoning'; text: string }
+  | { type: 'text'; text: string }
+  | { type: 'tool'; toolCall: ToolCall }
 
 export interface TextContent {
   type: 'text'

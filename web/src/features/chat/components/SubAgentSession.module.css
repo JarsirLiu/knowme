@@ -1,0 +1,64 @@
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--c-surface-2, #f4f5f7);
+  border: 1px solid var(--c-border, #e6e8ec);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text, #0b0d12);
+}
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.agentName {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--c-subtle, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.taskBubble {
+  background: var(--c-surface, #fff);
+  border: 1px solid var(--c-border, #e6e8ec);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--c-text, #0b0d12);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runningHint {
+  font-size: 12px;
+  color: var(--c-muted, #a1a1a1);
+  font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+  .session {
+    --c-surface-2: #161a22;
+    --c-border: #232834;
+    --c-text: #f2f4f8;
+    --c-subtle: #737373;
+    --c-muted: #9aa4b4;
+  }
+  .taskBubble {
+    --c-surface: #0f1218;
+    --c-border: #232834;
+  }
+}

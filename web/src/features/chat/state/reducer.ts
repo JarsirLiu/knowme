@@ -7,6 +7,7 @@ import type {
   ChatState,
   ContextCompaction,
   MessageContent,
+  SubAgentEvent,
   ToolCall,
   ToolCallStatus,
   Turn,
@@ -74,6 +75,51 @@ function appendContent(msg: AssistantMessage, content: MessageContent): Assistan
 
 function updateToolCall(msg: AssistantMessage, callId: string, update: Partial<ToolCall>): AssistantMessage {
   return { ...msg, toolCalls: msg.toolCalls.map((tool) => tool.id === callId ? { ...tool, ...update } : tool) }
+}
+
+function mergeSubAgentEvent(tool: ToolCall, event: SubAgentEvent): ToolCall {
+  const subEvents = tool.subEvents ?? []
+  const last = subEvents[subEvents.length - 1]
+  if (event.type === 'text' && last?.type === 'text') {
+    return { ...tool, subEvents: [...subEvents.slice(0, -1), { type: 'text', text: last.text + event.text }] }
+  }
+  if (event.type === 'reasoning' && last?.type === 'reasoning') {
+    return { ...tool, subEvents: [...subEvents.slice(0, -1), { type: 'reasoning', text: last.text + event.text }] }
+  }
+  return { ...tool, subEvents: [...subEvents, event] }
+}
+
+function appendSubAgentText(msg: AssistantMessage, callId: string, kind: 'text' | 'reasoning', text: string): AssistantMessage {
+  return {
+    ...msg,
+    toolCalls: msg.toolCalls.map((tool) => tool.id === callId
+      ? mergeSubAgentEvent(tool, { type: kind, text })
+      : tool),
+  }
+}
+
+function appendSubAgentToolEvent(msg: AssistantMessage, callId: string, event: SubAgentEvent): AssistantMessage {
+  return {
+    ...msg,
+    toolCalls: msg.toolCalls.map((tool) => tool.id === callId
+      ? mergeSubAgentEvent(tool, event)
+      : tool),
+  }
+}
+
+function updateSubAgentToolCall(msg: AssistantMessage, callId: string, nestedCallId: string, update: Partial<ToolCall>): AssistantMessage {
+  return {
+    ...msg,
+    toolCalls: msg.toolCalls.map((tool) => tool.id === callId
+      ? {
+          ...tool,
+          subEvents: (tool.subEvents ?? []).map((event) =>
+            event.type === 'tool' && event.toolCall.id === nestedCallId
+              ? { ...event, toolCall: { ...event.toolCall, ...update } }
+              : event),
+        }
+      : tool),
+  }
 }
 
 function isTerminal(status: ToolCallStatus) {
@@ -262,6 +308,13 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   if (!runId) return entries
 
   if (event.type === 'message.delta') {
+    const sourceToolCallId = event.data.sourceToolCallId
+    if (sourceToolCallId) {
+      return updateTimelineTurn(entries, runId, (turn) => ({
+        ...turn,
+        assistantMessage: appendSubAgentText(turn.assistantMessage, sourceToolCallId, 'text', event.data.text),
+      }))
+    }
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
       assistantMessage: appendContent(turn.assistantMessage, {
@@ -272,6 +325,13 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   }
 
   if (event.type === 'reasoning.delta') {
+    const sourceToolCallId = event.data.sourceToolCallId
+    if (sourceToolCallId) {
+      return updateTimelineTurn(entries, runId, (turn) => ({
+        ...turn,
+        assistantMessage: appendSubAgentText(turn.assistantMessage, sourceToolCallId, 'reasoning', event.data.text),
+      }))
+    }
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
       assistantMessage: appendContent(turn.assistantMessage, {
@@ -282,6 +342,14 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   }
 
   if (event.type === 'tool.called') {
+    const sourceToolCallId = event.data.sourceToolCallId
+    if (sourceToolCallId) {
+      const nested: ToolCall = { id: event.data.toolCallId, name: event.data.name, args: {}, status: 'running' }
+      return updateTimelineTurn(entries, runId, (turn) => ({
+        ...turn,
+        assistantMessage: appendSubAgentToolEvent(turn.assistantMessage, sourceToolCallId, { type: 'tool', toolCall: nested }),
+      }))
+    }
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
       assistantMessage: {
@@ -300,6 +368,13 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   }
 
   if (event.type === 'tool.arguments') {
+    const sourceToolCallId = event.data.sourceToolCallId
+    if (sourceToolCallId) {
+      return updateTimelineTurn(entries, runId, (turn) => ({
+        ...turn,
+        assistantMessage: updateSubAgentToolCall(turn.assistantMessage, sourceToolCallId, event.data.toolCallId, { args: event.data.args }),
+      }))
+    }
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
       assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, { args: event.data.args, rawArgs: undefined }),
@@ -336,6 +411,16 @@ export function applyTimelineEvent(entries: ChatEntry[], event: AnyTimelineEvent
   }
 
   if (event.type === 'tool.output') {
+    const sourceToolCallId = event.data.sourceToolCallId
+    if (sourceToolCallId) {
+      return updateTimelineTurn(entries, runId, (turn) => ({
+        ...turn,
+        assistantMessage: updateSubAgentToolCall(turn.assistantMessage, sourceToolCallId, event.data.toolCallId, {
+          status: 'completed',
+          result: event.data.result,
+        }),
+      }))
+    }
     return updateTimelineTurn(entries, runId, (turn) => ({
       ...turn,
       assistantMessage: updateToolCall(turn.assistantMessage, event.data.toolCallId, {

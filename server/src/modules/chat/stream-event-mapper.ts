@@ -3,14 +3,19 @@ import type { TimelineEventPayloadMap, TimelineEventType } from '@superagent/cor
 import type { TimelineEventStore } from '../events/timeline-event-store.js'
 
 export type TimelineDelta =
-  | { type: 'message.delta'; data: { messageId: string; text: string } }
-  | { type: 'reasoning.delta'; data: { messageId: string; text: string } }
-  | { type: 'tool.called'; data: { messageId: string; toolCallId: string; name: string } }
-  | { type: 'tool.arguments'; data: { toolCallId: string; args: unknown } }
+  | { type: 'message.delta'; data: { messageId: string; text: string; sourceToolCallId?: string } }
+  | { type: 'reasoning.delta'; data: { messageId: string; text: string; sourceToolCallId?: string } }
+  | { type: 'tool.called'; data: { messageId: string; toolCallId: string; name: string; sourceToolCallId?: string } }
+  | { type: 'tool.arguments'; data: { toolCallId: string; args: unknown; sourceToolCallId?: string } }
   | { type: 'tool.arguments.delta'; data: { toolCallId: string; delta: string } }
-  | { type: 'tool.output'; data: { toolCallId: string; result: unknown } }
+  | { type: 'tool.output'; data: { toolCallId: string; result: unknown; sourceToolCallId?: string } }
 
-export type StreamEventState = { sawReasoningDelta: boolean }
+export type StreamEventState = {
+  sawReasoningDelta: boolean
+  activeSubAgentToolCallId: string | null
+}
+
+const SUBAGENT_TOOL_NAMES = new Set(['explore_project', 'review_code_quality', 'task'])
 
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
@@ -41,7 +46,7 @@ export async function persistRunStreamEvent(
   leaseOwner?: string,
 ): Promise<void> {
   if (event.type === 'raw_model_stream_event') {
-    const deltas = handleRawModelEvent(event.data, runId)
+    const deltas = handleRawModelEvent(event.data, runId, state.activeSubAgentToolCallId ?? undefined)
     for (const delta of deltas) {
       if (delta.type === 'reasoning.delta') state.sawReasoningDelta = true
       await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
@@ -56,13 +61,19 @@ export async function persistRunStreamEvent(
 
   const deltas = handleRunItemEvent(event.name, item.type, raw, runId, state)
   for (const delta of deltas) {
+    if (delta.type === 'tool.called' && SUBAGENT_TOOL_NAMES.has(delta.data.name)) {
+      state.activeSubAgentToolCallId = delta.data.toolCallId
+    }
+    if (delta.type === 'tool.output' && delta.data.toolCallId === state.activeSubAgentToolCallId) {
+      state.activeSubAgentToolCallId = null
+    }
     await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
   }
 }
 
 // ─── Raw Model Event Handlers ────────────────────────────────────────────────
 
-type RawModelHandler = (data: Record<string, unknown>, runId: string) => TimelineDelta[]
+type RawModelHandler = (data: Record<string, unknown>, runId: string, sourceToolCallId?: string) => TimelineDelta[]
 
 const rawModelHandlers: RawModelHandler[] = [
   handleTextDelta,
@@ -72,27 +83,28 @@ const rawModelHandlers: RawModelHandler[] = [
   handleCustomToolCallArgDelta,
 ]
 
-function handleRawModelEvent(data: unknown, runId: string): TimelineDelta[] {
+function handleRawModelEvent(data: unknown, runId: string, sourceToolCallId?: string): TimelineDelta[] {
   const record = asRecord(data)
   if (!record) return []
   for (const handler of rawModelHandlers) {
-    const result = handler(record, runId)
+    const result = handler(record, runId, sourceToolCallId)
     if (result.length > 0) return result
   }
   return []
 }
 
-function handleTextDelta(data: Record<string, unknown>, runId: string): TimelineDelta[] {
+function handleTextDelta(data: Record<string, unknown>, runId: string, sourceToolCallId?: string): TimelineDelta[] {
   const type = typeof data.type === 'string' ? data.type : ''
   const text = typeof data.delta === 'string' ? data.delta : ''
   if (!text || (type !== 'output_text_delta' && type !== 'text-delta')) return []
+  const messageId = getStreamMessageId(data, asRecord(data.event), runId)
   return [{
     type: 'message.delta',
-    data: { messageId: getStreamMessageId(data, asRecord(data.event), runId), text },
+    data: sourceToolCallId ? { messageId, text, sourceToolCallId } : { messageId, text },
   }]
 }
 
-function handleReasoningDelta(data: Record<string, unknown>, runId: string): TimelineDelta[] {
+function handleReasoningDelta(data: Record<string, unknown>, runId: string, sourceToolCallId?: string): TimelineDelta[] {
   const type = typeof data.type === 'string' ? data.type : ''
   if (type !== 'model') return []
   const providerEvent = asRecord(data.event)
@@ -105,9 +117,10 @@ function handleReasoningDelta(data: Record<string, unknown>, runId: string): Tim
     eventType === 'response.reasoning_summary_text.delta' ||
     eventType === 'response.reasoning_text.delta'
   ) {
+    const messageId = getStreamMessageId(data, providerEvent, runId)
     return [{
       type: 'reasoning.delta',
-      data: { messageId: getStreamMessageId(data, providerEvent, runId), text },
+      data: sourceToolCallId ? { messageId, text, sourceToolCallId } : { messageId, text },
     }]
   }
   return []
@@ -186,25 +199,37 @@ function handleRunItemEvent(
   return []
 }
 
-function handleToolCalled(raw: Record<string, unknown>, runId: string, _state: StreamEventState): TimelineDelta[] {
+function handleToolCalled(raw: Record<string, unknown>, runId: string, state: StreamEventState): TimelineDelta[] {
   const id = getToolCallId(raw)
+  const name = String(raw.name ?? 'unknown')
+  const isSubAgentRoot = SUBAGENT_TOOL_NAMES.has(name)
+  const sourceToolCallId = isSubAgentRoot ? undefined : state.activeSubAgentToolCallId ?? undefined
   const result: TimelineDelta[] = [{
     type: 'tool.called',
-    data: { messageId: runId, toolCallId: id, name: String(raw.name ?? 'unknown') },
+    data: sourceToolCallId
+      ? { messageId: runId, toolCallId: id, name, sourceToolCallId }
+      : { messageId: runId, toolCallId: id, name },
   }]
   if (raw.arguments !== undefined) {
     result.push({
       type: 'tool.arguments',
-      data: { toolCallId: id, args: parseToolArguments(raw.arguments) },
+      data: sourceToolCallId
+        ? { toolCallId: id, args: parseToolArguments(raw.arguments), sourceToolCallId }
+        : { toolCallId: id, args: parseToolArguments(raw.arguments) },
     })
   }
   return result
 }
 
-function handleToolOutput(raw: Record<string, unknown>, _runId: string, _state: StreamEventState): TimelineDelta[] {
+function handleToolOutput(raw: Record<string, unknown>, _runId: string, state: StreamEventState): TimelineDelta[] {
+  const id = getToolCallId(raw)
+  const isSubAgentExit = id === state.activeSubAgentToolCallId
+  const sourceToolCallId = isSubAgentExit ? undefined : state.activeSubAgentToolCallId ?? undefined
   return [{
     type: 'tool.output',
-    data: { toolCallId: getToolCallId(raw), result: normalizeSdkToolOutput(raw.output) },
+    data: sourceToolCallId
+      ? { toolCallId: id, result: normalizeSdkToolOutput(raw.output), sourceToolCallId }
+      : { toolCallId: id, result: normalizeSdkToolOutput(raw.output) },
   }]
 }
 
@@ -212,9 +237,12 @@ function handleReasoningItem(raw: Record<string, unknown>, runId: string, state:
   if (state.sawReasoningDelta) return []
   const text = extractReasoningText(raw)
   if (!text) return []
+  const sourceToolCallId = state.activeSubAgentToolCallId ?? undefined
   return [{
     type: 'reasoning.delta',
-    data: { messageId: getStreamMessageId(raw, undefined, runId), text },
+    data: sourceToolCallId
+      ? { messageId: getStreamMessageId(raw, undefined, runId), text, sourceToolCallId }
+      : { messageId: getStreamMessageId(raw, undefined, runId), text },
   }]
 }
 

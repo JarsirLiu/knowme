@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ToolCall } from '../types'
 import { DiffMessage } from '../messages/DiffMessage'
 import { Orb } from './Orb'
+import { SubAgentSession } from './SubAgentSession'
 import styles from './ToolCallItem.module.css'
 
 function Dots() {
@@ -115,6 +116,9 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
   const running = status === 'running'
   const isDone = status === 'completed' || status === 'failed' || status === 'denied'
 
+  const isSubAgent = !!toolCall.subEvents || name === 'explore_project' || name === 'review_code_quality' || name === 'task'
+  const hasSubEvents = !!(toolCall.subEvents && toolCall.subEvents.length > 0)
+
   const headerVerb = TOOL_HEADER_LABELS[name] ?? name
   const quote = getToolQuote(toolCall)
   const resultText = getToolResult(toolCall)
@@ -122,7 +126,7 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
 
   const hasDiff = !!(editArgs && editArgs.type === 'update_file' && editArgs.diff && isDone && !error)
   const editDiff = hasDiff ? editArgs!.diff! : null
-  const hasContent = !!quote || !!resultText || !!error || running || hasDiff
+  const hasContent = !!quote || !!resultText || !!error || running || hasDiff || hasSubEvents
 
   const headerText = quote ? `${headerVerb} "${quote}"` : headerVerb
 
@@ -160,7 +164,10 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
       {hasContent && (
         <div className={`${styles.tciCollapsible} ${!expanded ? styles.isCollapsed : ''}`}>
           <div className={styles.tciCollapsibleInner}>
-            {hasDiff && editDiff && (
+            {hasSubEvents && (
+              <SubAgentSession toolCall={toolCall} />
+            )}
+            {!hasSubEvents && hasDiff && editDiff && (
               <DiffMessage
                 diffs={[{
                   path: editArgs!.path,
@@ -170,15 +177,15 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
                 }]}
               />
             )}
-            {!hasDiff && (
+            {!hasSubEvents && !hasDiff && (
               <div className={styles.tciTerminal}>
-                {running && name === 'task' && (
+                {running && isSubAgent && (
                   <span className={styles.tciTaskRunning}>
                     <Orb size={18} />
                     <span className={styles.tciTaskLabel}>子agent 执行中…</span>
                   </span>
                 )}
-                {running && name !== 'task' && (
+                {running && !isSubAgent && (
                   <div className={styles.tciLoading}>
                     <span className={styles.tciDots}><Dots /></span>
                     <span className={styles.tciLoadingText}>Running...</span>

@@ -183,7 +183,7 @@ test('maps custom_tool_call_input.delta to tool.arguments.delta', () => {
 })
 
 test('maps run_item tool_called to tool.called and tool.arguments', () => {
-  const state: StreamEventState = { sawReasoningDelta: false }
+  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_called',
     item: {
@@ -198,7 +198,7 @@ test('maps run_item tool_called to tool.called and tool.arguments', () => {
 })
 
 test('maps run_item tool_output to tool.output', () => {
-  const state: StreamEventState = { sawReasoningDelta: false }
+  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_output',
     item: {
@@ -213,7 +213,7 @@ test('maps run_item tool_output to tool.output', () => {
 })
 
 test('unwraps the Agent SDK text envelope from tool output', () => {
-  const state: StreamEventState = { sawReasoningDelta: false }
+  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_output',
     item: {
@@ -234,7 +234,7 @@ test('unwraps the Agent SDK text envelope from tool output', () => {
 })
 
 test('ignores unmatched run_item events', () => {
-  const state: StreamEventState = { sawReasoningDelta: false }
+  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   assert.equal(
     extractRunItemStreamDelta({
       name: 'unknown_event',
