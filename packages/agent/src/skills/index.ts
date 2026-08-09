@@ -1,4 +1,5 @@
 export { loadSkills, readSkillByName, skillDir, skillsDir, listReferenceFiles, listScriptFiles } from './loader.js'
+export type { SkillScope } from './loader.js'
 export { createSkillTools } from './manager-tools.js'
 export { extractSkillMentions, resolveMentions } from './mention.js'
 export { parseSkillFile, splitFrontmatter, SKILL_FILENAME } from './parser.js'

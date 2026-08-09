@@ -50,3 +50,15 @@ export function parseSkillFile(raw: string): SkillMetadata | undefined {
   if (!frontmatter || !body) return undefined
   return { frontmatter, body, raw, dir: '' }
 }
+
+export function serializeSkillFile(fields: { name: string; description: string; version?: string; body: string }): string {
+  return [
+    '---',
+    `name: ${fields.name}`,
+    `description: ${fields.description}`,
+    fields.version ? `version: ${fields.version}` : '',
+    '---',
+    '',
+    fields.body,
+  ].filter(Boolean).join('\n')
+}

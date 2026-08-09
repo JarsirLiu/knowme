@@ -36,10 +36,14 @@ Chat Completions provider，并使用配置的 `baseURL` 连接兼容端点。�
 
 ### Skill 系统（`packages/agent/src/skills/`）
 
-Skill 是 `packages/agent` 内置的本地扩展机制，允许通过 `workspace/.superagent/skills/<id>/` 目录
-注入额外的 instructions 和工具。Skill 采用 `SKILL.md` 格式（YAML frontmatter + Markdown 正文），
-对齐 Codex 的 skill 约定。
+Skill 是扩展 agent 能力的本地机制，采用 `SKILL.md` 格式（YAML frontmatter + Markdown 正文），
+对齐 Codex 的 skill 约定。Skill 目录按层级解析，统一由 `packages/core` 的
+`CloudagentPaths` 计算，避免路径散落各处。
 
+- 层级与优先级：项目级 `<project>/.cloudagent/skills/` > 用户级
+  `CLOUDAGENT_HOME/skills/`（默认 `~/.cloudagent/skills/`）> 系统级
+  `CLOUDAGENT_HOME/.system/skills/`（内置只读）。`loadSkills` 按此顺序扫描并合并，
+  高优先级同名覆盖低优先级。
 - 格式：每个 skill 目录包含一个 `SKILL.md`，frontmatter 提供 `name`、`description`、`version`，
   正文是模型执行的指令。可选目录 `references/`（参考文档）和 `scripts/`（可执行脚本）。
 - 按需注入：`createCodingAgent` 不再把所有 skill 注入 prompt。用户在消息中使用 `$skill-name`
@@ -47,11 +51,13 @@ Skill 是 `packages/agent` 内置的本地扩展机制，允许通过 `workspace
   `<skill></skill>` 片段注入该次输入；未提及的 skill 不进入上下文。
 - 管理工具：`createSkillTools()` 生成四个工具（`list_skills`、`install_skill`、`create_skill`、
   `read_skill_reference`），挂载到主 Agent 的 `tools` 数组，使模型能在运行时自行管理 skill。
+  `create_skill`/`install_skill` 接受 `scope`（`project` 默认 / `user`），由模型询问用户后写入
+  对应层级。
 - 生效时机：skill 在每次 turn 由 `AgentRunExecutor` 加载（`loadSkills`）。新安装或创建的 skill
   需要等到下一次 turn 才生效。
-- 依赖方向：skill 系统只依赖 `packages/agent` 内部的 `skill/parser`、`mention` 和 `node:fs`，
-  不依赖 server、core 或 client。`AgentRunExecutor` 通过 `@superagent/agent` 导出的
-  `resolveMentions`/`loadSkills` 接入提及解析。
+- 依赖方向：skill 系统只依赖 `@superagent/core` 的 `CloudagentPaths` 以及本包内部的
+  `skill/parser`、`mention` 和 `node:fs`，不依赖 server 或 client。`AgentRunExecutor`
+  通过 `@superagent/agent` 导出的 `resolveMentions`/`loadSkills` 接入提及解析。
 
 ### `packages/client`
 

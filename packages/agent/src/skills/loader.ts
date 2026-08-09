@@ -1,28 +1,46 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
+import { CloudagentPaths } from '@superagent/core/paths'
 import { parseSkillFile, SKILL_FILENAME } from './parser.js'
 import type { SkillMetadata } from './types.js'
 
-export const SKILLS_DIR_NAME = '.superagent/skills'
+export type SkillScope = 'project' | 'user' | 'system'
 
-export function skillsDir(workspace: string): string {
-  return join(workspace, SKILLS_DIR_NAME)
+/** Resolve the skills directory for a scope. Defaults to project scope. */
+export function skillsDir(workspace: string, scope: SkillScope = 'project'): string {
+  const paths = new CloudagentPaths()
+  switch (scope) {
+    case 'project':
+      return paths.projectSkillsDir(workspace)
+    case 'user':
+      return paths.userSkillsDir()
+    case 'system':
+      return paths.systemSkillsDir()
+  }
 }
 
-export function skillDir(workspace: string, skillId: string): string {
-  return join(skillsDir(workspace), skillId)
+export function skillDir(workspace: string, skillId: string, scope: SkillScope = 'project'): string {
+  return join(skillsDir(workspace, scope), skillId)
 }
 
-export function skillReferencesDir(workspace: string, skillId: string): string {
-  return join(skillDir(workspace, skillId), 'references')
-}
-
-export function skillScriptsDir(workspace: string, skillId: string): string {
-  return join(skillDir(workspace, skillId), 'scripts')
-}
-
+/**
+ * Load all skills visible to a workspace, merging the project, user, and system
+ * layers. Higher-priority layers override lower ones by skill name:
+ * project > user > system. Each returned skill carries its resolved `dir`.
+ */
 export async function loadSkills(workspace: string): Promise<SkillMetadata[]> {
-  const base = skillsDir(workspace)
+  const paths = new CloudagentPaths()
+  const byName = new Map<string, SkillMetadata>()
+  for (const base of paths.allSkillDirs(workspace)) {
+    for (const skill of await readSkillsFromDir(base)) {
+      const key = skill.frontmatter.name.toLowerCase()
+      if (!byName.has(key)) byName.set(key, skill)
+    }
+  }
+  return [...byName.values()]
+}
+
+async function readSkillsFromDir(base: string): Promise<SkillMetadata[]> {
   let entries: import('node:fs').Dirent[]
   try {
     entries = await fs.readdir(base, { withFileTypes: true })
@@ -33,7 +51,7 @@ export async function loadSkills(workspace: string): Promise<SkillMetadata[]> {
   const skills: SkillMetadata[] = []
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
-    const dir = skillDir(workspace, entry.name)
+    const dir = join(base, entry.name)
     let raw: string
     try {
       raw = await fs.readFile(join(dir, SKILL_FILENAME), 'utf8')
@@ -52,26 +70,18 @@ export async function readSkillByName(workspace: string, name: string): Promise<
   return skills.find((s) => s.frontmatter.name.toLowerCase() === name.toLowerCase())
 }
 
-export async function readReferenceFile(workspace: string, skillId: string, file: string): Promise<string | undefined> {
+export async function listReferenceFiles(dir: string): Promise<string[]> {
   try {
-    return await fs.readFile(join(skillReferencesDir(workspace, skillId), file), 'utf8')
-  } catch {
-    return undefined
-  }
-}
-
-export async function listReferenceFiles(workspace: string, skillId: string): Promise<string[]> {
-  try {
-    const entries = await fs.readdir(skillReferencesDir(workspace, skillId), { withFileTypes: true })
+    const entries = await fs.readdir(join(dir, 'references'), { withFileTypes: true })
     return entries.filter((e) => e.isFile()).map((e) => e.name)
   } catch {
     return []
   }
 }
 
-export async function listScriptFiles(workspace: string, skillId: string): Promise<string[]> {
+export async function listScriptFiles(dir: string): Promise<string[]> {
   try {
-    const entries = await fs.readdir(skillScriptsDir(workspace, skillId), { withFileTypes: true })
+    const entries = await fs.readdir(join(dir, 'scripts'), { withFileTypes: true })
     return entries.filter((e) => e.isFile()).map((e) => e.name)
   } catch {
     return []

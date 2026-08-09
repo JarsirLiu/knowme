@@ -11,6 +11,12 @@
       "development": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./paths": {
+      "types": "./src/paths/index.ts",
+      "development": "./src/paths/index.ts",
+      "import": "./dist/paths/index.js",
+      "default": "./dist/paths/index.js"
     }
   },
   "scripts": {
@@ -18,6 +24,7 @@
     "dev": "tsc --watch"
   },
   "devDependencies": {
+    "@types/node": "^26",
     "typescript": "^5"
   }
 }

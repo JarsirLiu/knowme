@@ -2,13 +2,12 @@ import { tool } from '@openai/agents'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { loadSkills, skillDir, skillsDir, listReferenceFiles, listScriptFiles } from './loader.js'
-import { parseSkillFile, SKILL_FILENAME } from './parser.js'
+import { loadSkills, skillDir, listReferenceFiles, listScriptFiles } from './loader.js'
+import type { SkillScope } from './loader.js'
+import { parseSkillFile, serializeSkillFile, SKILL_FILENAME } from './parser.js'
 import type { SkillFrontmatter, SkillPackage } from './types.js'
 
 export function createSkillTools(workspace: string) {
-  const base = skillsDir(workspace)
-
   const listSkills = tool({
     name: 'list_skills',
     description: 'List all installed skills in the current workspace.',
@@ -17,8 +16,8 @@ export function createSkillTools(workspace: string) {
       const skills = await loadSkills(workspace)
       if (skills.length === 0) return 'No skills installed.'
       const lines = await Promise.all(skills.map(async (s) => {
-        const refs = await listReferenceFiles(workspace, s.frontmatter.name)
-        const scripts = await listScriptFiles(workspace, s.frontmatter.name)
+        const refs = await listReferenceFiles(s.dir)
+        const scripts = await listScriptFiles(s.dir)
         const extras = [
           refs.length > 0 ? `${refs.length} references` : '',
           scripts.length > 0 ? `${scripts.length} scripts` : '',
@@ -31,11 +30,12 @@ export function createSkillTools(workspace: string) {
 
   const installSkill = tool({
     name: 'install_skill',
-    description: 'Download a skill package JSON from a URL and install it into .superagent/skills/<skillId>/. The skill takes effect on the next turn.',
+    description: 'Download a skill package JSON from a URL and install it. The skill takes effect on the next turn.',
     parameters: z.object({
       url: z.string().url().describe('URL pointing to a skill package JSON (must contain skillId + frontmatter + body)'),
+      scope: z.enum(['project', 'user']).default('project').describe('Where to install: project (default, shared with team) or user (global, available across projects)'),
     }),
-    execute: async ({ url }) => {
+    execute: async ({ url, scope }) => {
       let res: Response
       try {
         res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
@@ -52,64 +52,47 @@ export function createSkillTools(workspace: string) {
       if (!pkg.skillId || !pkg.frontmatter?.name || !pkg.frontmatter?.description || typeof pkg.body !== 'string') {
         return 'Invalid skill package: must contain "skillId", "frontmatter.name", "frontmatter.description", and "body".'
       }
-      const dir = skillDir(workspace, pkg.skillId)
-      const skillMd = [
-        '---',
-        `name: ${pkg.frontmatter.name}`,
-        `description: ${pkg.frontmatter.description}`,
-        pkg.frontmatter.version ? `version: ${pkg.frontmatter.version}` : '',
-        '---',
-        '',
-        pkg.body,
-      ].filter(Boolean).join('\n')
+      const dir = skillDir(workspace, pkg.skillId, scope)
+      const skillMd = serializeSkillFile({
+        name: pkg.frontmatter.name,
+        description: pkg.frontmatter.description,
+        version: pkg.frontmatter.version,
+        body: pkg.body,
+      })
       try {
         await fs.mkdir(dir, { recursive: true })
         await fs.writeFile(join(dir, SKILL_FILENAME), skillMd, 'utf8')
       } catch (err) {
         return `Failed to write skill files: ${err instanceof Error ? err.message : String(err)}`
       }
-      return `Skill "${pkg.frontmatter.name}" (${pkg.skillId}) installed. Use it by typing $${pkg.frontmatter.name} in your message.`
+      const scopeLabel = scope === 'user' ? 'globally' : 'in this project'
+      return `Skill "${pkg.frontmatter.name}" (${pkg.skillId}) installed ${scopeLabel}. Use it by typing $${pkg.frontmatter.name} in your message.`
     },
   })
 
   const createSkill = tool({
     name: 'create_skill',
-    description: 'Create a new skill by writing SKILL.md to .superagent/skills/<skillId>/. The skill takes effect on the next turn.',
+    description: 'Create a new skill by writing SKILL.md. The skill takes effect on the next turn.',
     parameters: z.object({
       skillId: z.string().min(1).describe('Unique skill identifier (used as directory name)'),
       name: z.string().min(1).describe('Skill name (used as $name mention)'),
       description: z.string().describe('What this skill does'),
       instructions: z.string().min(1).describe('Markdown instructions injected when the skill is mentioned'),
       version: z.string().default('1.0.0'),
+      scope: z.enum(['project', 'user']).default('project').describe('Where to create: project (default, shared with team) or user (global, available across projects)'),
     }),
-    execute: async ({ skillId, name, description, instructions, version }) => {
-      const dir = skillDir(workspace, skillId)
-      const frontmatter: SkillFrontmatter = { name, description, version }
-      const parsed = parseSkillFile([
-        '---',
-        `name: ${name}`,
-        `description: ${description}`,
-        `version: ${version}`,
-        '---',
-        '',
-        instructions,
-      ].join('\n'))
+    execute: async ({ skillId, name, description, instructions, version, scope }) => {
+      const dir = skillDir(workspace, skillId, scope)
+      const parsed = parseSkillFile(serializeSkillFile({ name, description, version, body: instructions }))
       if (!parsed) return 'Failed to create skill: invalid frontmatter.'
       try {
         await fs.mkdir(dir, { recursive: true })
-        await fs.writeFile(join(dir, SKILL_FILENAME), [
-          '---',
-          `name: ${name}`,
-          `description: ${description}`,
-          `version: ${version}`,
-          '---',
-          '',
-          instructions,
-        ].join('\n'), 'utf8')
+        await fs.writeFile(join(dir, SKILL_FILENAME), serializeSkillFile({ name, description, version, body: instructions }), 'utf8')
       } catch (err) {
         return `Failed to create skill: ${err instanceof Error ? err.message : String(err)}`
       }
-      return `Skill "${name}" (${skillId}) created. Use it by typing $${name} in your message.`
+      const scopeLabel = scope === 'user' ? 'globally' : 'in this project'
+      return `Skill "${name}" (${skillId}) created ${scopeLabel}. Use it by typing $${name} in your message.`
     },
   })
 
@@ -121,11 +104,12 @@ export function createSkillTools(workspace: string) {
       file: z.string().min(1).describe('Reference file name'),
     }),
     execute: async ({ skillId, file }) => {
-      const dir = skillDir(workspace, skillId)
-      const refDir = join(dir, 'references')
+      const skills = await loadSkills(workspace)
+      const skill = skills.find((s) => s.frontmatter.name.toLowerCase() === skillId.toLowerCase())
+      if (!skill) return `Skill "${skillId}" not found.`
+      const refDir = join(skill.dir, 'references')
       try {
-        const content = await fs.readFile(join(refDir, file), 'utf8')
-        return content
+        return await fs.readFile(join(refDir, file), 'utf8')
       } catch {
         return `File "${file}" not found in skill "${skillId}" references/.`
       }

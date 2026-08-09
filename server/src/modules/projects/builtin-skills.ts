@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
+import { CloudagentPaths } from '@superagent/core/paths'
 import { SKILL_FILENAME } from '@superagent/agent'
 
 const SKILL_CREATOR_MD =
@@ -14,14 +15,15 @@ This skill guides you through creating a new skill.
 
 ## About Skills
 
-A skill is a SKILL.md file with YAML frontmatter stored in \`.superagent/skills/<skill-name>/\`. When the user types \`$<skill-name>\` in their message, the skill's content is loaded into context.
+A skill is a SKILL.md file with YAML frontmatter stored in a skill directory. When the user types \`$<skill-name>\` in their message, the skill's content is loaded into context.
 
 ## Skill Creation Process
 
 1. Understand what the user wants with concrete examples
 2. Design the skill: name, description, and markdown instructions
-3. Create the skill using \`create_skill\` tool
-4. Tell the user how to use it (\`$技能名\`)
+3. Ask the user where to put the skill: project (shared with team) or user (global, available across projects)
+4. Create the skill using \`create_skill\` tool with the appropriate scope
+5. Tell the user how to use it (\`$技能名\`)
 
 ### Step 1: Understand
 
@@ -39,24 +41,43 @@ Based on the user's answers, design:
 - **description**: short, clear, when to use this skill
 - **instructions**: markdown body telling the agent what to do. Use imperative sentences.
 
-### Step 3: Create
+### Step 3: Ask Scope
 
-Call the \`create_skill\` tool with the designed values:
+Ask where to put the skill:
+- **project scope**: saved in \`.cloudagent/skills/\` inside the project, committed to the repo, shared with the team
+- **user scope**: saved in \`~/.cloudagent/skills/\`, available across all projects
+
+If the user has no preference, default to project scope.
+
+### Step 4: Create
+
+Call the \`create_skill\` tool with the designed values and scope:
 
 - \`skillId\`: same as name (directory name)
 - \`name\`: the skill name
 - \`description\`: one-line description
 - \`instructions\`: markdown body
+- \`scope\`: "project" or "user"
 
-### Step 4: Tell the User
+### Step 5: Tell the User
 
 Tell the user they can now use the skill by typing \`$<name>\` in their message.`
 
-function seedDir(workspace: string, skillId: string): string {
-  return join(workspace, '.superagent', 'skills', skillId)
+interface BuiltinSkillDef {
+  skillId: string
+  content: string
 }
 
-export async function seedBuiltinSkills(workspace: string): Promise<void> {
-  await fs.mkdir(seedDir(workspace, 'skill-creator'), { recursive: true })
-  await fs.writeFile(join(seedDir(workspace, 'skill-creator'), SKILL_FILENAME), SKILL_CREATOR_MD, 'utf8')
+const BUILTIN_SKILLS: BuiltinSkillDef[] = [
+  { skillId: 'skill-creator', content: SKILL_CREATOR_MD },
+]
+
+export async function seedBuiltinSkills(): Promise<void> {
+  const paths = new CloudagentPaths()
+  const base = paths.systemSkillsDir()
+  for (const { skillId, content } of BUILTIN_SKILLS) {
+    const dir = join(base, skillId)
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(join(dir, SKILL_FILENAME), content, 'utf8')
+  }
 }
