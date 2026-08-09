@@ -44,22 +44,30 @@ export function SubAgentSession({ toolCall }: { toolCall: ToolCall }) {
       )}
       <div className={styles.events}>
         {events.map((event, i) => (
-          <SubAgentEventItem key={i} event={event} />
+          <SubAgentEventItem key={i} event={event} isStreaming={running && i === events.length - 1} />
         ))}
         {!hasEvents && running && (
-          <div className={styles.runningHint}>子agent 正在执行…</div>
+          <span className={styles.tciTaskRunning}>
+            <Orb size={18} />
+            <span className={styles.tciTaskLabel}>子agent 执行中…</span>
+          </span>
         )}
       </div>
     </div>
   )
 }
 
-function SubAgentEventItem({ event }: { event: SubAgentEvent }) {
+function SubAgentEventItem({ event, isStreaming }: { event: SubAgentEvent; isStreaming: boolean }) {
   if (event.type === 'reasoning') {
-    return <ReasoningMessage content={event.text} isStreaming={false} />
+    return <ReasoningMessage content={event.text} isStreaming={isStreaming} />
   }
   if (event.type === 'text') {
-    return <TextMessage content={event.text} />
+    return (
+      <div className={isStreaming ? styles.textStreaming : undefined}>
+        <TextMessage content={event.text} />
+        {isStreaming && <span className={styles.caret} aria-hidden="true" />}
+      </div>
+    )
   }
   return <ToolCallList toolCalls={[event.toolCall]} />
 }

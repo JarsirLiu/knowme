@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { ToolCall } from '../types'
 import { DiffMessage } from '../messages/DiffMessage'
-import { Orb } from './Orb'
-import { SubAgentSession } from './SubAgentSession'
+import { SubAgentDialog } from './SubAgentDialog'
 import styles from './ToolCallItem.module.css'
 
 function Dots() {
@@ -112,6 +111,7 @@ function getEditArgs(tc: ToolCall): EditArgs | null {
 
 export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
   const [expanded, setExpanded] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const { name, status, error } = toolCall
   const running = status === 'running'
   const isDone = status === 'completed' || status === 'failed' || status === 'denied'
@@ -146,12 +146,24 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
 
   return (
     <div className={styles.tci}>
-      <div className={styles.tciRow}>
+      <div
+        className={styles.tciRow + (isSubAgent ? ' ' + styles.tciClickable : '')}
+        onClick={isSubAgent ? () => setDialogOpen(true) : undefined}
+      >
         <span className={`${styles.tciLabel} ${styles.tciShimmer} ${isDone ? styles.isDone : ''}`}>
           <span className={styles.tciVerb}>{headerVerb}</span>
           {quote && <span className={styles.tciQuote}> "{quote}"</span>}
         </span>
-        {hasContent && (
+        {isSubAgent && (
+          <span className={styles.tciSubAgentAction}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </span>
+        )}
+        {!isSubAgent && hasContent && (
           <button
             className={styles.tciChevron}
             onClick={() => setExpanded((v) => !v)}
@@ -161,13 +173,10 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
           </button>
         )}
       </div>
-      {hasContent && (
+      {!isSubAgent && hasContent && (
         <div className={`${styles.tciCollapsible} ${!expanded ? styles.isCollapsed : ''}`}>
           <div className={styles.tciCollapsibleInner}>
-            {hasSubEvents && (
-              <SubAgentSession toolCall={toolCall} />
-            )}
-            {!hasSubEvents && hasDiff && editDiff && (
+            {hasDiff && editDiff && (
               <DiffMessage
                 diffs={[{
                   path: editArgs!.path,
@@ -177,15 +186,9 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
                 }]}
               />
             )}
-            {!hasSubEvents && !hasDiff && (
+            {!hasDiff && (
               <div className={styles.tciTerminal}>
-                {running && isSubAgent && (
-                  <span className={styles.tciTaskRunning}>
-                    <Orb size={18} />
-                    <span className={styles.tciTaskLabel}>子agent 执行中…</span>
-                  </span>
-                )}
-                {running && !isSubAgent && (
+                {running && (
                   <div className={styles.tciLoading}>
                     <span className={styles.tciDots}><Dots /></span>
                     <span className={styles.tciLoadingText}>Running...</span>
@@ -201,6 +204,9 @@ export function ToolCallItem({ toolCall }: { toolCall: ToolCall }) {
             )}
           </div>
         </div>
+      )}
+      {isSubAgent && (
+        <SubAgentDialog toolCall={toolCall} open={dialogOpen} onClose={() => setDialogOpen(false)} />
       )}
     </div>
   )

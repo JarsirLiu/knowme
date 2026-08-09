@@ -31,14 +31,10 @@
     --c-danger-soft: rgba(248, 113, 113, 0.16);
     --c-warning-soft: rgba(251, 191, 36, 0.16);
   }
-  .tciTaskLabel {
-    background: linear-gradient(90deg, #a1a1a1 0%, #a1a1a1 30%, rgba(161, 161, 161, 0.45) 45%, rgba(161, 161, 161, 0.45) 55%, #a1a1a1 70%, #a1a1a1 100%);
-    background-size: 300% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-  }
 }
 .tciRow { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.tciRow.tciClickable { cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+.tciRow.tciClickable:hover { background: var(--c-surface-2); }
 .tciRow > svg { flex: none; color: var(--c-subtle); margin-left: -1px; }
 .tciLabel { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--c-text); white-space: nowrap; min-width: 0; }
 .tciVerb { font-weight: 500; color: var(--c-text); }
@@ -48,6 +44,7 @@
 .tciChevron { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: none; background: none; color: var(--c-subtle); cursor: pointer; border-radius: 4px; transition: color 0.16s var(--ease), transform 0.28s var(--ease); margin-left: 4px; }
 .tciChevron:hover { color: var(--c-text); }
 .tciChevron[aria-expanded="false"] { transform: rotate(180deg); }
+.tciSubAgentAction { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; color: var(--c-subtle); margin-left: auto; }
 .tciCollapsible { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 0.32s var(--ease), opacity 0.22s var(--ease); }
 .tciCollapsible.isCollapsed { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 .tciCollapsibleInner { min-height: 0; overflow: hidden; }
@@ -61,23 +58,6 @@
   min-width: 0;
 }
 .tciLoading { display: inline-flex; align-items: center; gap: 6px; color: var(--c-subtle); }
-.tciTaskRunning { display: inline-flex; align-items: center; gap: 6px; }
-.tciTaskLabel {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: linear-gradient(90deg, #a1a1a1 0%, #a1a1a1 30%, rgba(161, 161, 161, 0.45) 45%, rgba(161, 161, 161, 0.45) 55%, #a1a1a1 70%, #a1a1a1 100%);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: tci-task-shine 2.25s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
-}
-@keyframes tci-task-shine {
-  0%, 18% { background-position: 100% 0; }
-  82%, 100% { background-position: 0% 0; }
-}
 .tciDots { display: inline-flex; align-items: center; }
 .tciLoadingText { font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace); font-size: 12px; }
 .tciOutput { margin: 0; padding: 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; color: var(--c-muted); font-size: 12px; line-height: 1.55; }
@@ -88,5 +68,4 @@
 @keyframes tci-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @media (prefers-reduced-motion: reduce) {
   .tciShimmer { animation: none; background: none; -webkit-text-fill-color: var(--c-text); color: var(--c-text); }
-  .tciTaskLabel { animation: none; -webkit-text-fill-color: var(--c-muted); color: var(--c-muted); }
 }

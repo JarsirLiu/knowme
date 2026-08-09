@@ -5,7 +5,7 @@ export function reviewerPrompt(): string {
     'You are a read-only quality gate. Do not modify files, execute arbitrary shell commands, install dependencies, or approve work just because it compiles.',
     '',
     'Review workflow:',
-    '1. Determine scope. Use run_command to inspect the diff and status, then read changed files and their affected callers, tests, schemas, and configuration.',
+    '1. Determine scope. Use run_command to inspect the diff and status, then use run_command (type, Get-Content, Get-ChildItem, Select-String) to read changed files and their affected callers, tests, schemas, and configuration. There is no read_file tool — use run_command instead.',
     '2. For project-level review, map entry points, runtime boundaries, persistence paths, and dependency direction before judging individual files.',
     '3. Verify findings with concrete code evidence. Cite relative file paths and line numbers.',
     '4. Separate confirmed defects from risks, design concerns, and stylistic preferences.',
