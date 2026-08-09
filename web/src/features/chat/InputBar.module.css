@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 24px 16px;
+  padding: 0 24px 20px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -12,8 +12,8 @@
   width: 100%;
   max-width: 900px;
   margin-bottom: 8px;
-  background: #fff;
-  border: 1px solid #dfe4e7;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(31, 43, 51, .12);
   overflow: hidden;
@@ -66,7 +66,7 @@
 
 .commandDesc {
   font-size: 12px;
-  color: var(--color-muted);
+  color: var(--c-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -78,17 +78,17 @@
   align-items: stretch;
   gap: 8px;
   min-height: 112px;
-  padding: 12px 14px 10px;
-  background: #fff;
-  border: 1px solid #dfe4e7;
+  padding: 14px 16px 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 20px;
   box-shadow: 0 6px 22px rgba(31, 43, 51, .06), 0 1px 3px rgba(31, 43, 51, .03);
   width: 100%;
   max-width: 900px;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.inputBarFocused { border-color: #b7c2c8; box-shadow: 0 7px 26px rgba(31, 43, 51, .1); }
+.inputBarFocused { border-color: var(--c-border-strong); box-shadow: 0 7px 26px rgba(31, 43, 51, .1); }
 
 .plusButton {
   width: 30px;
@@ -114,7 +114,7 @@
   background: transparent;
   outline: none;
   font-size: 16px;
-  color: var(--text-primary);
+  color: var(--c-text);
   resize: none;
   line-height: 1.5;
   padding: 4px 2px;
@@ -122,7 +122,7 @@
   max-height: 132px;
 }
 
-.inputTextarea::placeholder { color: var(--color-muted-soft); }
+.inputTextarea::placeholder { color: var(--c-muted); opacity: 0.6; }
 
 .inputFooter {
   display: flex;
@@ -136,35 +136,6 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.permissionLink {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #e67e22;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
-
-.permissionLink:hover {
-  background: var(--color-bg-hover);
-}
-
-.modelLabel {
-  font-size: 12px;
-  color: var(--color-muted);
-}
-
-.languageLabel {
-  font-size: 11px;
-  color: var(--color-muted-soft);
-  padding: 2px 4px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 3px;
 }
 
 .sendButton {
@@ -187,7 +158,7 @@
 
 .sendButtonDisabled {
   background: #e1e3e4;
-  color: var(--color-muted-soft);
+  color: var(--c-muted);
   cursor: not-allowed;
 }
 
@@ -201,4 +172,20 @@
   .inputBarWrap { bottom: 10px; padding: 0 12px; }
   .inputBar { min-height: 124px; border-radius: 22px; }
   .inputTextarea { font-size: 16px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .commandMenu { background: var(--c-surface); border-color: var(--c-border); }
+  .commandItemActive { background: var(--c-surface-2); }
+  .commandLabelSystem { color: var(--c-text); }
+  .commandLabelSkill { color: var(--c-accent); }
+  .commandGroupHeader { color: var(--c-muted); }
+  .commandGroupHeader:not(:first-child) { border-top-color: var(--c-border); }
+  .inputBar { background: var(--c-surface); border-color: var(--c-border); box-shadow: 0 6px 22px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.15); }
+  .inputBarFocused { border-color: var(--c-border-strong); box-shadow: 0 7px 26px rgba(0,0,0,0.4); }
+  .plusButton { color: var(--c-muted); }
+  .plusButton:hover { background: var(--c-surface-2); }
+  .sendButtonSend { background: var(--c-text); color: var(--c-surface); }
+  .sendButtonDisabled { background: var(--c-surface-2); color: var(--c-muted); }
+  .sendButtonStop { background: var(--c-text); color: var(--c-surface); }
 }

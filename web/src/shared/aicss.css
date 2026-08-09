@@ -1,0 +1,161 @@
+/* AIcss visual layer: component behavior stays in the feature styles. */
+
+button,
+input,
+textarea {
+  font-family: var(--font-sans);
+}
+
+[class*="Sidebar_sidebar"] {
+  background: var(--ab-surface) !important;
+  border-right: 1px solid var(--ab-border) !important;
+}
+
+[class*="Sidebar_brandName"] {
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+}
+
+[class*="Sidebar_newButton"],
+[class*="Sidebar_projectButton"],
+[class*="Sidebar_conversationItem"],
+[class*="Sidebar_addProjectButton"],
+[class*="Sidebar_projectNewButton"],
+[class*="Sidebar_conversationDeleteButton"],
+[class*="Header_menuButton"],
+[class*="Header_headerButton"] {
+  border-radius: var(--ab-radius-sm) !important;
+}
+
+[class*="Sidebar_conversationItemActive"],
+[class*="Sidebar_projectRow"]:hover,
+[class*="Sidebar_projectButton"]:hover,
+[class*="Sidebar_conversationItem"]:hover,
+[class*="Sidebar_newButton"]:hover {
+  background: var(--ab-surface-2) !important;
+}
+
+[class*="Header_header"] {
+  min-height: 50px !important;
+  background: color-mix(in srgb, var(--ab-surface) 88%, transparent) !important;
+  border-bottom: 1px solid var(--ab-border) !important;
+}
+
+[class*="Header_headerTitle"] {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+[class*="InputBar_inputBarWrap"] {
+  background: linear-gradient(to top, var(--ab-surface) 72%, transparent) !important;
+}
+
+[class*="InputBar_inputBar"] {
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-lg) !important;
+  background: var(--ab-surface) !important;
+  box-shadow: var(--ab-shadow-card) !important;
+}
+
+[class*="InputBar_inputBarFocused"] {
+  border-color: var(--ab-accent) !important;
+  box-shadow: 0 0 0 3px var(--ab-accent-soft), var(--ab-shadow-card) !important;
+}
+
+[class*="InputBar_commandMenu"] {
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-md) !important;
+  box-shadow: var(--ab-shadow-elevated) !important;
+}
+
+[class*="InputBar_commandItemActive"],
+[class*="InputBar_plusButton"]:hover,
+[class*="InputBar_permissionLink"]:hover {
+  background: var(--ab-surface-2) !important;
+}
+
+[class*="Turn_userBubble"] {
+  padding: 9px 13px !important;
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-md) !important;
+  background: var(--ab-surface-2) !important;
+}
+
+[class*="ApprovalBar_banner"],
+[class*="ToolCallItem_item"],
+[class*="ContextCompactionMessage_message"] {
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-md) !important;
+  box-shadow: none !important;
+}
+
+[class*="ApprovalBar_approveBtn"],
+[class*="ApprovalBar_denyBtn"] {
+  border-radius: var(--ab-radius-sm) !important;
+}
+
+[class*="TextMessage_codeFrame"],
+[class*="TextMessage_tableWrap"],
+[class*="ToolCallItem_shellBlock"] {
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-md) !important;
+  box-shadow: var(--ab-shadow-card) !important;
+}
+
+[class*="TextMessage_codeHeader"],
+[class*="ToolCallItem_shellHeader"] {
+  background: var(--ab-surface-2) !important;
+  border-bottom-color: var(--ab-border) !important;
+}
+
+[class*="ProjectModal_modal"],
+[class*="DirectoryPickerModal_modal"] {
+  border: 1px solid var(--ab-border) !important;
+  border-radius: var(--ab-radius-lg) !important;
+  background: var(--ab-surface) !important;
+  box-shadow: var(--ab-shadow-elevated) !important;
+}
+
+[class*="ProjectModal_modalHeader"],
+[class*="DirectoryPickerModal_header"],
+[class*="DirectoryPickerModal_navBar"],
+[class*="DirectoryPickerModal_footer"] {
+  border-color: var(--ab-border) !important;
+}
+
+[class*="ProjectModal_modal"] h2,
+[class*="DirectoryPickerModal_modal"] h2,
+[class*="ProjectModal_sourceLabel"],
+[class*="DirectoryPickerModal_breadcrumbLabel"] {
+  color: var(--ab-text) !important;
+}
+
+[class*="ProjectModal_nameField"],
+[class*="ProjectModal_sourcePicker"],
+[class*="DirectoryPickerModal_pathInput"] {
+  border-color: var(--ab-border-strong) !important;
+  border-radius: var(--ab-radius-md) !important;
+  background: var(--ab-surface) !important;
+  color: var(--ab-text) !important;
+}
+
+[class*="ProjectModal_submitButton"],
+[class*="DirectoryPickerModal_selectButton"] {
+  border-color: var(--ab-text) !important;
+  border-radius: var(--ab-radius-sm) !important;
+  background: var(--ab-text) !important;
+  color: var(--ab-surface) !important;
+}
+
+[class*="ProjectModal_cancelButton"],
+[class*="DirectoryPickerModal_cancelButton"] {
+  border-radius: var(--ab-radius-sm) !important;
+  color: var(--ab-text-muted) !important;
+}
+
+[class*="ProjectModal_overlay"],
+[class*="DirectoryPickerModal_overlay"] {
+  background: color-mix(in srgb, var(--ab-bg) 72%, transparent) !important;
+  backdrop-filter: blur(4px);
+}

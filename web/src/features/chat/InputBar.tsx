@@ -69,13 +69,6 @@ export function InputBar({
     const newValue = newBefore + cmd.insert + ' ' + after
     onChange(newValue)
     setShowCommands(false)
-    if (cmd.selectFrom !== undefined) {
-      const from = newBefore.length + cmd.selectFrom
-      requestAnimationFrame(() => {
-        const el = textareaRef.current
-        if (el) el.setSelectionRange(from, newValue.length)
-      })
-    }
     textareaRef.current?.focus()
   }
 

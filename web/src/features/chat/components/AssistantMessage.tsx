@@ -1,9 +1,8 @@
-// AssistantMessage — renders content + tool calls + approval bar based on status
-
 import type { AssistantMessage as AssistantMessageType } from '../types'
 import { ContextCompactionMessage, TextMessage, ReasoningMessage } from '../messages'
 import { ToolCallList } from './ToolCallItem'
 import { ApprovalBar } from './ApprovalBar'
+import { ThinkingState } from './ThinkingState'
 import styles from './AssistantMessage.module.css'
 
 interface AssistantMessageProps {
@@ -25,7 +24,7 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
   return (
     <div className={`${styles.message} ${styles[message.status] || ''}`}>
       {isEmpty && message.status === 'streaming' ? (
-        <span className={styles.cursor}>▍</span>
+        <ThinkingState />
       ) : (
         <>
           <div className={styles.content}>
@@ -39,7 +38,7 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
               }
               return part.content.type === 'text'
                 ? <TextMessage key={`text-${i}`} content={part.content.text} />
-                : <ReasoningMessage key={`reasoning-${i}`} content={part.content.text} />
+                : <ReasoningMessage key={`reasoning-${i}`} content={part.content.text} isStreaming={message.status === 'streaming'} />
             })}
           </div>
 
@@ -49,6 +48,10 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
               onApprove={onApprove}
               onDeny={onDeny}
             />
+          )}
+
+          {message.status === 'streaming' && !isEmpty && (
+            <span className={styles.caret} aria-hidden="true" />
           )}
         </>
       )}

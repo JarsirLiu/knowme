@@ -1,2 +1,2 @@
-.mainPane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: #fff; }
-.errorBanner { padding: 10px 48px; background: #fff1f0; color: #b42318; border-bottom: 1px solid #ffd0cc; font-size: 13px; }
+.mainPane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--c-surface); }
+.errorBanner { padding: 10px 48px; background: var(--c-danger-soft); color: var(--c-danger); border-bottom: 0.5px solid var(--c-border); font-size: 13px; }

@@ -17,38 +17,38 @@ function textContent(value: ReactNode): string {
   return ''
 }
 
-function CodeBlock({ children }: { children?: ReactNode }) {
+function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false)
-  const child = Children.toArray(children).find(isValidElement)
-  const childProps = child ? elementProps(child) : undefined
-  const codeClassName = typeof childProps?.className === 'string' ? childProps.className : ''
-  const language = codeClassName.match(/language-([\w-]+)/)?.[1] ?? 'text'
-  const source = textContent(childProps?.children ?? children).replace(/\n$/, '')
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(source)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Clipboard access can be unavailable in local, non-secure browser contexts.
-    }
+  const lines = code.split("\n")
+  const copy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
   }
-
   return (
-    <div className={styles.codeFrame}>
-      <div className={styles.codeHeader}>
-        <span>{language}</span>
-        <button type="button" className={styles.copyButton} onClick={copy} title="复制代码">
-          {copied ? '已复制' : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="9" y="9" width="11" height="11" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
+    <div className={styles.cb}>
+      <div className={styles.cbHead}>
+        <span className={styles.cbFile}>
+          <svg className={styles.cbIcon} viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="m8 6-6 6 6 6M16 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <span className={styles.cbLang}>{lang}</span>
+        </span>
+        <button className={styles.cbCopy} onClick={copy} aria-label={copied ? "Copied" : "Copy code"}>
+          {copied ? (
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m4.5 12.75 6 6 9-13.5" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.5" /><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2" /></svg>
           )}
+          <span>{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>
-      <pre>{children}</pre>
+      <div className={styles.cbBody}>
+        {lines.map((line, i) => (
+          <div className={styles.cbRow} key={i}>
+            <span className={styles.cbLn}>{i + 1}</span>
+            <code className={styles.cbCode}>{line || "\u00A0"}</code>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -65,7 +65,14 @@ export function TextMessage({ content }: { content: string }) {
           h1: ({ children }) => <h1>{children}</h1>,
           h2: ({ children }) => <h2>{children}</h2>,
           h3: ({ children }) => <h3>{children}</h3>,
-          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+          pre: ({ children }) => {
+            const child = Children.toArray(children).find(isValidElement)
+            const childProps = child ? elementProps(child) : undefined
+            const codeClassName = typeof childProps?.className === 'string' ? childProps.className : ''
+            const lang = codeClassName.match(/language-([\w-]+)/)?.[1] ?? 'text'
+            const code = textContent(childProps?.children ?? children).replace(/\n$/, '')
+            return <CodeBlock lang={lang} code={code} />
+          },
           code: ({ children, className }) => {
             const isBlock = Boolean(className?.includes('language-'))
             return isBlock ? (

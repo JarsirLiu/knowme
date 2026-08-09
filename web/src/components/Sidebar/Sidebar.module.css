@@ -4,24 +4,24 @@
   display: flex;
   flex-direction: column;
   padding: 18px 8px 12px;
-  background: var(--color-bg-sidebar);
-  color: #343b40;
-  border-right: 1px solid #e4ebef;
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  border-right: 0.5px solid var(--c-border);
   overflow: hidden;
 }
 
 .brandRow { display: flex; align-items: center; gap: 5px; padding: 2px 8px 16px; }
-.brandName { color: #353c41; font-size: 18px; font-weight: 700; }
-.brandChevron { color: #7b858c; }
+.brandName { color: var(--c-text); font-size: 18px; font-weight: 700; }
+.brandChevron { color: var(--c-muted); }
 
-.newButton { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 9px; background: transparent; color: #3f474d; cursor: pointer; text-align: left; font: inherit; font-size: 13px; }
+.newButton { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 9px; background: transparent; color: var(--c-muted); cursor: pointer; text-align: left; font: inherit; font-size: 13px; }
 .newButton:disabled { opacity: .45; cursor: not-allowed; }
-.newButton:hover:not(:disabled) { background: #e4edf3; color: #1e282f; }
-.newIcon { color: #57636b; }
+.newButton:hover:not(:disabled) { background: var(--c-surface-3); color: var(--c-text); }
+.newIcon { color: var(--c-muted); }
 
-.sectionHeader { display: flex; align-items: center; gap: 7px; padding: 20px 8px 6px; color: #8e989f; font-size: 13px; font-weight: 600; }
-.addProjectButton { display: grid; place-items: center; margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #77838b; cursor: pointer; }
-.addProjectButton:hover { background: #e1eaf0; color: #263139; }
+.sectionHeader { display: flex; align-items: center; gap: 7px; padding: 20px 8px 6px; color: var(--c-muted); font-size: 13px; font-weight: 600; }
+.addProjectButton { display: grid; place-items: center; margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--c-muted); cursor: pointer; }
+.addProjectButton:hover { background: var(--c-surface-3); color: var(--c-text); }
 
 .projectList { flex: 1; overflow-y: auto; min-height: 0; }
 .projectSection { margin-bottom: 2px; }
@@ -36,11 +36,11 @@
   padding: 6px 8px;
   border-radius: 9px;
   background: transparent;
-  color: #4b545a;
+  color: var(--c-muted);
   font-size: 13px;
 }
-.projectRow:hover, .projectButton:hover { background: #e5edf2; color: #232d33; }
-.projectIcon { flex: 0 0 17px; color: #626e75; }
+.projectRow:hover, .projectButton:hover { background: var(--c-surface-3); color: var(--c-text); }
+.projectIcon { flex: 0 0 17px; color: var(--c-muted); }
 .projectName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
 .projectNewButton {
@@ -53,19 +53,19 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #7a858c;
+  color: var(--c-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity .12s, background .12s, color .12s;
 }
 .projectRow:hover .projectNewButton { opacity: 1; }
-.projectNewButton:hover { background: #dce6ec; color: #263139; }
+.projectNewButton:hover { background: var(--c-surface-3); color: var(--c-text); }
 .projectNewButton:disabled { opacity: .35; cursor: not-allowed; }
 
 .conversationList { padding: 2px 0 7px 20px; }
-.conversationItem { display: flex; align-items: center; min-width: 0; border-radius: 8px; color: #687279; }
-.conversationItem:hover { background: #e8eff3; color: #263139; }
-.conversationItemActive { background: #dfe8ee; color: #222d34; }
+.conversationItem { display: flex; align-items: center; min-width: 0; border-radius: 8px; color: var(--c-muted); }
+.conversationItem:hover { background: var(--c-surface-3); color: var(--c-text); }
+.conversationItemActive { background: var(--c-surface-3); color: var(--c-text); }
 
 .conversationButton {
   display: flex;
@@ -88,41 +88,40 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #8b969d;
+  color: var(--c-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity .12s, background .12s, color .12s;
 }
 .conversationItem:hover .conversationDeleteButton,
 .conversationDeleteButton:focus-visible { opacity: 1; }
-.conversationDeleteButton:hover:not(:disabled) { background: #dbe5eb; color: #9a3f3f; }
+.conversationDeleteButton:hover:not(:disabled) { background: var(--c-surface-3); color: var(--c-danger); }
 .conversationDeleteButton:disabled { cursor: not-allowed; opacity: .35; }
 
-.statusDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: #a0abb2; }
-.statusDotBusy { background: #6a9d33; box-shadow: 0 0 0 3px rgba(106,157,51,.14); }
+.statusDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: var(--c-subtle); }
+.statusDotBusy { background: var(--c-success); box-shadow: 0 0 0 3px color-mix(in sRGB, var(--c-success) 20%, transparent); }
 .conversationTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-.emptyProject { padding: 5px 11px 8px 20px; color: #9ba5ab; font-size: 13px; }
+.emptyProject { padding: 5px 11px 8px 20px; color: var(--c-subtle); font-size: 13px; }
 
 .projectPopover {
   position: fixed;
   z-index: 40;
   width: min(260px, calc(100vw - 24px));
   overflow: hidden;
-  border: 1px solid #dfe4e7;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(31, 43, 51, .11), 0 2px 4px rgba(31, 43, 51, .05);
-  color: #343b40;
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  background: var(--c-surface);
+  color: var(--c-text);
 }
 .popoverHeader { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 9px; font-size: 13px; }
-.popoverFolderIcon { color: #4f5b62; flex: 0 0 auto; }
+.popoverFolderIcon { color: var(--c-muted); flex: 0 0 auto; }
 .popoverHeader strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-.popoverNewButton { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; border: 0; border-radius: 5px; background: transparent; color: #77838a; cursor: pointer; }
-.popoverNewButton:hover { background: #eef3f5; color: #273239; }
+.popoverNewButton { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; border: 0; border-radius: 5px; background: transparent; color: var(--c-muted); cursor: pointer; }
+.popoverNewButton:hover { background: var(--c-surface-2); color: var(--c-text); }
 .popoverNewButton:disabled { opacity: .4; cursor: not-allowed; }
-.popoverRow { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 9px; border-top: 1px solid #edf0f2; color: #41494f; font-size: 12px; }
-.popoverRow svg { flex: 0 0 auto; color: #8a949a; }
+.popoverRow { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 9px; border-top: 0.5px solid var(--c-border); color: var(--c-muted); font-size: 12px; }
+.popoverRow svg { flex: 0 0 auto; color: var(--c-muted); }
 .popoverPath { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Mobile: sidebar becomes overlay drawer */

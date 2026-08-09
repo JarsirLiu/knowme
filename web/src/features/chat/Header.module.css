@@ -1,11 +1,23 @@
-.header { display: flex; align-items: center; justify-content: space-between; min-height: 50px; padding: 0 20px; flex-shrink: 0; background: #fff; border-bottom: 1px solid #f0f1f2; }
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 20px;
+  flex-shrink: 0;
+  background: color-mix(in sRGB, var(--c-surface) 82%, transparent);
+  border-bottom: 0.5px solid var(--c-border);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
 .headerLeft { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.folderIcon { display: grid; place-items: center; width: 20px; height: 20px; color: #4f5b62; }
-.headerTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #252b30; font-size: 15px; font-weight: 600; }
+.folderIcon { display: grid; place-items: center; width: 20px; height: 20px; color: var(--c-muted); }
+.headerTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-text); font-size: 15px; font-weight: 600; }
 .headerRight { display: flex; align-items: center; gap: 8px; }
-.headerButton { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #77838a; cursor: pointer; }
-.headerButton:hover { background: #eef3f5; color: #273239; }
-.menuButton { display: none; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #6e7a82; cursor: pointer; }
+.headerButton { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--c-muted); cursor: pointer; }
+.headerButton:hover { background: var(--c-surface-2); color: var(--c-text); }
+.menuButton { display: none; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--c-muted); cursor: pointer; }
+.menuButton:hover { background: var(--c-surface-2); }
 
 @media (max-width: 760px) {
   .header { padding: 0 18px; }

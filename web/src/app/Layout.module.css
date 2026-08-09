@@ -3,7 +3,7 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #fff;
+  background: var(--c-surface);
 }
 
 .loadingScreen {
@@ -11,8 +11,8 @@
   place-items: center;
   width: 100%;
   height: 100vh;
-  color: #858985;
-  background: #fff;
+  color: var(--c-muted);
+  background: var(--c-surface);
   font-size: 13px;
 }
 
@@ -49,13 +49,13 @@
   transform: translate(-50%, -50%);
   width: 3px;
   height: 40px;
-  background: #c5cdd3;
+  background: var(--c-border);
   border-radius: 2px;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .resizeHandle:hover::after {
-  background: #7b8a93;
+  background: var(--c-border-strong);
   opacity: 0.8;
 }
 
