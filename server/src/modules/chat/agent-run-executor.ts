@@ -68,11 +68,15 @@ export class AgentRunExecutor {
     const loaded = await this.loadInput(agent, agentRun.input, agentRun.state)
     const state = loaded instanceof RunState ? await this.applyApprovals(agentRun.id, conversation.id, loaded, leaseOwner) : undefined
     const message = loaded instanceof RunState ? '' : loaded
-    const { mentioned, cleaned } = resolveMentions(message, await loadSkills(project.rootPath))
+    const skills = await loadSkills(project.rootPath)
+    const skillIndex = skills.length > 0
+      ? '## Available Skills\n' + skills.map((s) => `- $${s.frontmatter.name}: ${s.frontmatter.description}`).join('\n') + '\n\n'
+      : ''
+    const { mentioned, cleaned } = resolveMentions(message, skills)
     const skillBlock = mentioned.length > 0
       ? mentioned.map((s) => `<skill>\n<name>${s.frontmatter.name}</name>\n<path>${join(s.dir, SKILL_FILENAME)}</path>\n${s.body}\n</skill>`).join('\n\n') + '\n\n'
       : ''
-    const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + skillBlock + cleaned
+    const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + skillIndex + skillBlock + cleaned
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
     let stream: AgentStream | undefined
     try {

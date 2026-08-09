@@ -61,7 +61,11 @@ Call the \`create_skill\` tool with the designed values and scope:
 
 ### Step 5: Tell the User
 
-Tell the user they can now use the skill by typing \`$<name>\` in their message.`
+Tell the user they can now use the skill by typing \`$<name>\` in their message.
+
+### Step 6: (Optional) Install from URL
+
+If the user wants to install a skill from a URL, download the skill package JSON using \`web_fetch\`, then call \`create_skill\` with the extracted fields.`
 
 interface BuiltinSkillDef {
   skillId: string
