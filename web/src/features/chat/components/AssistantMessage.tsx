@@ -14,6 +14,9 @@ interface AssistantMessageProps {
 export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessageProps) {
   const awaitingApproval = message.toolCalls.find((tc) => tc.status === 'awaiting_approval')
   const isEmpty = message.content.length === 0 && message.toolCalls.length === 0
+  const reasoningStreaming = message.status === 'streaming' &&
+    message.content.length > 0 &&
+    message.content[message.content.length - 1].type === 'reasoning'
   const parts = message.parts.length > 0
     ? message.parts
     : [
@@ -38,7 +41,7 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
               }
               return part.content.type === 'text'
                 ? <TextMessage key={`text-${i}`} content={part.content.text} />
-                : <ReasoningMessage key={`reasoning-${i}`} content={part.content.text} isStreaming={message.status === 'streaming'} />
+                : <ReasoningMessage key={`reasoning-${i}`} content={part.content.text} isStreaming={reasoningStreaming} />
             })}
           </div>
 
