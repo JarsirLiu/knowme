@@ -11,7 +11,6 @@ export type TimelineDelta =
   | { type: 'tool.output'; data: { toolCallId: string; result: unknown; sourceToolCallId?: string } }
 
 export type StreamEventState = {
-  sawReasoningDelta: boolean
   activeSubAgentToolCallId: string | null
 }
 
@@ -48,7 +47,6 @@ export async function persistRunStreamEvent(
   if (event.type === 'raw_model_stream_event') {
     const deltas = handleRawModelEvent(event.data, runId, state.activeSubAgentToolCallId ?? undefined)
     for (const delta of deltas) {
-      if (delta.type === 'reasoning.delta') state.sawReasoningDelta = true
       await append(store, conversationId, runId, delta.type, delta.data, leaseOwner)
     }
     return
@@ -181,7 +179,6 @@ type RunItemHandler = {
 const runItemHandlers: RunItemHandler[] = [
   { match: (n, t) => n === 'tool_called' && t === 'tool_call_item', handle: handleToolCalled },
   { match: (n, t) => n === 'tool_output' && t === 'tool_call_output_item', handle: handleToolOutput },
-  { match: (n, t) => n === 'reasoning_item_created' && t === 'reasoning_item', handle: handleReasoningItem },
 ]
 
 function handleRunItemEvent(
@@ -230,19 +227,6 @@ function handleToolOutput(raw: Record<string, unknown>, _runId: string, state: S
     data: sourceToolCallId
       ? { toolCallId: id, result: normalizeSdkToolOutput(raw.output), sourceToolCallId }
       : { toolCallId: id, result: normalizeSdkToolOutput(raw.output) },
-  }]
-}
-
-function handleReasoningItem(raw: Record<string, unknown>, runId: string, state: StreamEventState): TimelineDelta[] {
-  if (state.sawReasoningDelta) return []
-  const text = extractReasoningText(raw)
-  if (!text) return []
-  const sourceToolCallId = state.activeSubAgentToolCallId ?? undefined
-  return [{
-    type: 'reasoning.delta',
-    data: sourceToolCallId
-      ? { messageId: getStreamMessageId(raw, undefined, runId), text, sourceToolCallId }
-      : { messageId: getStreamMessageId(raw, undefined, runId), text },
   }]
 }
 
@@ -303,10 +287,4 @@ function parseToolArguments(value: unknown): unknown {
   try { return JSON.parse(value) } catch { return value }
 }
 
-function extractReasoningText(raw: Record<string, unknown>): string {
-  const content = Array.isArray(raw.content) ? raw.content : Array.isArray(raw.rawContent) ? raw.rawContent : []
-  return content.map((part) => {
-    const record = asRecord(part)
-    return typeof record?.text === 'string' ? record.text : ''
-  }).filter(Boolean).join('')
-}
+

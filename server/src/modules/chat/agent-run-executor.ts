@@ -91,7 +91,7 @@ export class AgentRunExecutor {
         },
       })
 
-      const streamState: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
+      const streamState: StreamEventState = { activeSubAgentToolCallId: null }
       await this.consumeStream(stream, conversation.id, runId, streamState, leaseOwner)
 
       const interruptions = stream.interruptions
