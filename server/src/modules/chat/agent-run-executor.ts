@@ -6,7 +6,7 @@ import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import type { Session } from '@openai/agents'
-import { estimateTokens } from '../history/session-compaction.js'
+import { estimateTokens } from '../history/token-estimator.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import { getToolCallId, persistRunStreamEvent } from './stream-event-mapper.js'
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
@@ -94,6 +94,17 @@ export class AgentRunExecutor {
       : ''
     const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + skillIndex + skillBlock + cleaned
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
+
+    if (!resumed) {
+      // Auto-compact before the run starts so this turn's input stays within
+      // the token budget. Manual /compact is handled elsewhere; this only fires
+      // when the predicted input crosses the configured threshold.
+      await session.runCompaction().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn('[context-compaction] auto skipped:', message)
+      })
+    }
+
     let stream: AgentStream | undefined
     try {
       stream = await run(agent, state ?? runInput, {

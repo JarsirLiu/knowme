@@ -6,6 +6,7 @@ import {
 import {
   SessionCompactionCoordinator,
 } from './session-compaction-coordinator.js'
+import { persistCompactionMessage } from './session-compaction.js'
 import type {
   CompactionObserver,
   SessionCompactionOptions,
@@ -66,13 +67,18 @@ export class PrismaAgentSession implements Session {
     return this.compactionCoordinator.compact(trigger)
   }
 
-  async runCompaction(): Promise<null> {
-    return this.compactionCoordinator.runAutoCompaction()
+  async runCompaction(): Promise<SessionCompactionResult | null> {
+    const result = await this.compactionCoordinator.runAutoCompaction()
+    if (result?.status === 'compacted') {
+      await persistCompactionMessage(this.sessionId, result)
+    }
+    return result
   }
 }
 
 export type CompactionSession = Session & {
   compact(trigger: SessionCompactionTrigger): Promise<SessionCompactionResult>
+  runCompaction(): Promise<SessionCompactionResult | null>
 }
 
 export interface AgentSessionFactory {

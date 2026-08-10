@@ -1,8 +1,8 @@
 import type { AgentInputItem } from '@openai/agents'
+import { estimateTokens } from './token-estimator.js'
 import {
   createCompactionBudget,
   createSummaryItem,
-  estimateTokens,
   isReasoningItem,
   selectManualCompactionRange,
   selectRecentTail,
