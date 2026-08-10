@@ -61,10 +61,18 @@ export class LocalShell implements Shell {
             if (err?.signal === 'SIGTERM' || err?.name === 'AbortError' || err?.code === 'ABORT_ERR') {
               return { stdout: stdout.slice(0, maxLen), stderr: stderr.slice(0, maxLen), outcome: { type: 'timeout' } }
             }
+            let errorText = stderr.slice(0, maxLen)
+            if (!errorText && err) {
+              if (err.code === 'ENOENT') {
+                errorText = `Command failed: working directory not found (${this.workspace}). The project directory may have been deleted or renamed.`
+              } else {
+                errorText = err.message ? err.message.slice(0, maxLen) : ''
+              }
+            }
             return {
               stdout: stdout.slice(0, maxLen),
-              stderr: stderr.slice(0, maxLen),
-              outcome: { type: 'exit', exitCode: typeof err?.code === 'number' ? err.code : null },
+              stderr: errorText,
+              outcome: { type: 'exit', exitCode: err ? 1 : null },
             }
           }
           resolve(resolveOutput())
