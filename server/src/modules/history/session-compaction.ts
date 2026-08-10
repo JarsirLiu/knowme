@@ -4,6 +4,7 @@ import {
   createSummaryItem,
   estimateTokens,
   isReasoningItem,
+  selectManualCompactionRange,
   selectRecentTail,
   skipped,
   type SessionCompactionResult,
@@ -68,19 +69,24 @@ export class SessionCompactionService {
       return skipped(trigger, 'context token budget not reached', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
     }
 
-    const selection = selectRecentTail(items, options.keepRecentTokens)
+    const selection = force
+      ? selectManualCompactionRange(items)
+      : selectRecentTail(items, options.keepRecentTokens)
     if (!selection) {
-      return skipped(trigger, 'no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+      const reason = force
+        ? 'no historical turn available to compact'
+        : 'no complete historical turn fits the recent token budget'
+      return skipped(trigger, reason, items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
     }
 
-    const compactedItems = items.slice(0, selection.startIndex)
+    const compactedItems = selection.compactedItems
     if (compactedItems.length === 0) {
       return skipped(trigger, 'no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
     }
 
     await hooks?.beforeCompaction?.()
 
-    const summaryItems = compactedItems.filter((item) => !isReasoningItem(item))
+    const summaryItems = compactedItems.filter((item: AgentInputItem) => !isReasoningItem(item))
     const summary = await options.summarizer.summarize({
       items: summaryItems,
       maxPromptChars: options.maxPromptChars,
@@ -88,9 +94,9 @@ export class SessionCompactionService {
     const summaryItem = createSummaryItem(summary, {
       trigger,
       compactedItems: compactedItems.length,
-      keptItems: selection.recentItems.length,
+      keptItems: selection.keptItems.length,
     })
-    const replacement = [summaryItem, ...selection.recentItems]
+    const replacement = [summaryItem, ...selection.keptItems]
 
     await this.repository.replaceItems(sessionId, replacement)
 
@@ -100,14 +106,14 @@ export class SessionCompactionService {
       beforeItems: items.length,
       afterItems: replacement.length,
       compactedItems: compactedItems.length,
-      keptItems: selection.recentItems.length,
+      keptItems: selection.keptItems.length,
       summary,
       estimatedTokensBefore,
       estimatedTokensAfter: estimateTokens(replacement),
       predictedInputTokens,
       ...(baseline ? { confirmedInputTokens: baseline.inputTokens } : {}),
       inputBudgetTokens: budget.inputBudgetTokens,
-      recentTokenBudget: options.keepRecentTokens,
+      recentTokenBudget: force ? 0 : options.keepRecentTokens,
     }
   }
 

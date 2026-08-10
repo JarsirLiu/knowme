@@ -1,4 +1,5 @@
 import type { SessionCompactionResult } from '../history/compaction-policy.js'
+import { randomUUID } from 'node:crypto'
 import { persistCompactionMessage } from '../history/session-compaction.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import { LegacyTimelineMigration } from './legacy-timeline-migration.js'
@@ -100,7 +101,15 @@ export class ConversationService {
     const events: AnyTimelineEvent[] = []
     const session = this.buildCompactionSession(id, sessionId, events)
     const result = await session.compact('manual')
-    if (result.status !== 'compacted') return { ...result, events }
+    if (result.status !== 'compacted') {
+      const skippedId = randomUUID()
+      events.push(await this.timelineStore.append(id, null, 'context_compaction.skipped', {
+        id: skippedId,
+        trigger: 'manual',
+        reason: result.reason ?? 'no historical turn available to compact',
+      }))
+      return { ...result, events }
+    }
 
     await this.compactionPersister(sessionId, result)
     await this.repository.touch(id)

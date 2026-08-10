@@ -116,13 +116,15 @@ function toTimelineEvent(row: {
   payload: string
   createdAt: Date
 }): AnyTimelineEvent {
-  return {
+  const parsed = JSON.parse(row.payload) as Record<string, unknown>
+  const event = {
     id: row.id,
     conversationId: row.conversationId,
     runId: row.runId,
     sequence: row.sequence,
     type: row.type as TimelineEventType,
-    data: JSON.parse(row.payload) as never,
+    data: parsed,
     createdAt: row.createdAt.toISOString(),
   }
+  return event as unknown as AnyTimelineEvent
 }

@@ -73,7 +73,8 @@ test('session compaction can run with an injected persistence port', async () =>
   }, 'manual')
 
   assert.equal(result.status, 'compacted')
-  assert.equal(result.compactedItems, 4)
-  assert.equal(replacement?.length, 2)
-  assert.match(JSON.stringify(replacement?.[0]), /summary for 4 items/)
+  assert.equal(result.compactedItems, 5)
+  assert.equal(result.keptItems, 0)
+  assert.equal(replacement?.length, 1)
+  assert.match(JSON.stringify(replacement?.[0]), /summary for 5 items/)
 })

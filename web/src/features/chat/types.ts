@@ -41,7 +41,7 @@ export interface ReasoningContent {
 export interface ContextCompaction {
   id: string
   trigger: 'auto' | 'manual'
-  status: 'running' | 'completed' | 'failed'
+  status: 'running' | 'completed' | 'failed' | 'skipped'
   compactedItems?: number
   keptItems?: number
   reason?: string
@@ -53,7 +53,6 @@ export type MessageContent = TextContent | ReasoningContent
 export type AssistantPart =
   | { type: 'content'; content: MessageContent }
   | { type: 'tool'; callId: string }
-  | { type: 'compaction'; compaction: ContextCompaction }
 
 export interface AssistantMessage {
   id: string

@@ -41,7 +41,36 @@ export function createCompactionBudget(options: CompactionPolicyOptions) {
   }
 }
 
-export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number) {
+export interface CompactionSelection {
+  compactedItems: AgentInputItem[]
+  keptItems: AgentInputItem[]
+}
+
+/**
+ * Manual compaction (e.g. `/compact`): summarize the entire conversation and
+ * keep nothing verbatim. This matches the codex/OpenAI style where compaction
+ * produces a standalone summary message and every later turn, token count, and
+ * further compaction starts from that summary. It also avoids preserving a
+ * near-threshold "last turn" verbatim, which would defeat the purpose.
+ *
+ * Returns undefined when there is no history worth summarizing.
+ */
+export function selectManualCompactionRange(items: AgentInputItem[]): CompactionSelection | undefined {
+  if (items.length === 0) return undefined
+  return {
+    compactedItems: items,
+    keptItems: [],
+  }
+}
+
+/**
+ * Automatic compaction: keep the most recent turns that fit within
+ * `keepRecentTokens` verbatim, and summarize everything before them.
+ *
+ * Returns undefined when no complete historical turn fits the recent budget
+ * (e.g. a single turn already exceeds the budget).
+ */
+export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number): CompactionSelection | undefined {
   const userStarts = items.flatMap((item, index) => isUserMessage(item) ? [index] : [])
   if (userStarts.length === 0) return undefined
 
@@ -58,9 +87,8 @@ export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: numb
 
   if (startIndex === items.length || startIndex === 0) return undefined
   return {
-    startIndex,
-    recentItems: items.slice(startIndex),
-    recentTokens,
+    compactedItems: items.slice(0, startIndex),
+    keptItems: items.slice(startIndex),
   }
 }
 

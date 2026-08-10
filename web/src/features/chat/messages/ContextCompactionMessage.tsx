@@ -4,13 +4,12 @@ import styles from './ContextCompactionMessage.module.css'
 function label(compaction: ContextCompaction) {
   if (compaction.status === 'running') return '正在压缩上下文'
   if (compaction.status === 'failed') return '上下文压缩失败'
+  if (compaction.status === 'skipped') return '无需压缩上下文'
   if (compaction.reason) return '无需压缩上下文'
   return compaction.trigger === 'auto' ? '上下文已自动压缩' : '上下文已压缩'
 }
 
 export function ContextCompactionMessage({ compaction }: { compaction: ContextCompaction }) {
-  if (compaction.status === 'completed' && compaction.reason) return null
-
   return (
     <div className={`${styles.message} ${styles[compaction.status]}`} role="status">
       <span className={styles.icon} aria-hidden="true">

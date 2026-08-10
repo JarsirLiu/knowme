@@ -1,7 +1,7 @@
 import type { Conversation } from '@prisma/client'
 import type { ConversationRuntimeStatus } from '@superagent/core'
 
-export const ACTIVE_RUN_STATUSES = ['queued', 'running', 'waiting_approval'] as const
+export const ACTIVE_RUN_STATUSES: string[] = ['queued', 'running', 'waiting_approval']
 
 export function isActiveRun(status: string): boolean {
   return (ACTIVE_RUN_STATUSES as readonly string[]).includes(status)
@@ -21,7 +21,8 @@ export function isConversationAlive(status: string): boolean {
   return status === 'active'
 }
 
-export function runtimeStatusForRuns(runs: Array<{ status: string }>): ConversationRuntimeStatus {
+export function runtimeStatusForRuns(runs: Array<{ status: string }> | undefined): ConversationRuntimeStatus {
+  if (!runs || runs.length === 0) return 'idle'
   if (runs.some((run) => run.status === 'running')) return 'running'
   if (runs.some((run) => run.status === 'waiting_approval')) return 'waiting_approval'
   if (runs.some((run) => run.status === 'queued')) return 'queued'

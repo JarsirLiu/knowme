@@ -26,6 +26,7 @@ export type TimelineEventType =
   | 'context_compaction.started'
   | 'context_compaction.completed'
   | 'context_compaction.failed'
+  | 'context_compaction.skipped'
 
 export interface TimelineEventPayloadMap {
   'turn.started': {
@@ -73,6 +74,11 @@ export interface TimelineEventPayloadMap {
     id: string
     trigger: 'auto' | 'manual'
     error: string
+  }
+  'context_compaction.skipped': {
+    id: string
+    trigger: 'auto' | 'manual'
+    reason?: string
   }
 }
 

@@ -364,8 +364,9 @@ test('manual context compaction summarizes old session items and keeps recent it
   const result = await session.compact('manual')
  assert.equal(result.status, 'compacted')
  assert.equal(result.beforeItems, 5)
-  assert.equal(result.afterItems, 2)
-  assert.equal(result.compactedItems, 4)
+  assert.equal(result.afterItems, 1)
+  assert.equal(result.compactedItems, 5)
+  assert.equal(result.keptItems, 0)
   assert.ok(result.estimatedTokensBefore >= 90)
   assert.equal(result.confirmedInputTokens, 95)
  assert.equal(result.predictedInputTokens, 95 + result.estimatedTokensBefore - 10)
@@ -382,13 +383,12 @@ test('manual context compaction summarizes old session items and keeps recent it
   const compactionEvent = timeline.events.find((event) => event.type === 'context_compaction.completed')
   assert.equal(compactionEvent?.type, 'context_compaction.completed')
   assert.equal(compactionEvent?.data.trigger, 'manual')
-  assert.equal(compactionEvent?.data.compactedItems, 4)
+  assert.equal(compactionEvent?.data.compactedItems, 5)
 
   const compacted = await session.getItems()
-  assert.equal(compacted.length, 2)
+  assert.equal(compacted.length, 1)
  assert.equal((compacted[0] as any).role, 'system')
-  assert.match(JSON.stringify(compacted[0]), /summary for 4 items/)
-  assert.deepEqual(compacted.slice(1), items.slice(-1))
+  assert.match(JSON.stringify(compacted[0]), /summary for 5 items/)
 })
 
 test('approval decisions are persisted durably for coordinator recovery', async () => {
