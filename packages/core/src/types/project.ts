@@ -34,6 +34,9 @@ export interface Conversation {
   title: string
   status: 'active' | 'archived'
   agentProfile: string
+  parentConversationId?: string | null
+  parentRunId?: string | null
+  parentToolCallId?: string | null
   runtimeStatus?: ConversationRuntimeStatus
   createdAt: string
   updatedAt: string

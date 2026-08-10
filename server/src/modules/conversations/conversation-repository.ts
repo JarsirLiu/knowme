@@ -22,17 +22,28 @@ export type ContinuedTurnCreation = {
   title: string
 }
 
+export type ChildTurnCreation = {
+  projectId: string
+  parentConversationId: string
+  parentRunId: string
+  message: string
+  clientMessageId: string
+  title: string
+}
+
 export interface ConversationRepository {
   list(projectId: string): Promise<Conversation[]>
   get(id: string): Promise<Conversation | null>
   archive(id: string): Promise<Conversation>
   findByClientMessage(projectId: string, clientMessageId: string): Promise<{ conversation: Conversation; run: AgentRun } | null>
   createInitialTurn(data: TurnCreation): Promise<{ conversation: Conversation; run: AgentRun; startedEvent: AnyTimelineEvent }>
+  createChildTurn(data: ChildTurnCreation): Promise<{ conversation: Conversation; run: AgentRun; startedEvent: AnyTimelineEvent }>
   findTurn(conversationId: string, clientMessageId: string): Promise<AgentRun | null>
   createNextTurn(data: ContinuedTurnCreation): Promise<{ run: AgentRun; startedEvent: AnyTimelineEvent }>
   hasActiveRun(conversationId: string): Promise<boolean>
   getSessionId(conversationId: string): Promise<string>
   touch(id: string): Promise<void>
+  listChildrenOf(parentConversationId: string): Promise<Conversation[]>
 }
 
 export class PrismaConversationRepository implements ConversationRepository {
@@ -102,6 +113,61 @@ export class PrismaConversationRepository implements ConversationRepository {
     const conversation = await this.get(existing.conversation.id)
     if (!conversation) return null
     return { conversation, run: existing }
+  }
+
+  async createChildTurn(data: ChildTurnCreation) {
+    return prisma.$transaction(async (tx) => {
+      const conversation = await tx.conversation.create({
+        data: {
+          projectId: data.projectId,
+          title: data.title,
+          parentConversationId: data.parentConversationId,
+          parentRunId: data.parentRunId,
+          nextRunSequence: 1,
+        },
+      })
+      await tx.agentSession.create({
+        data: { conversationId: conversation.id, sessionKey: `local:${conversation.id}` },
+      })
+      const run = await tx.agentRun.create({
+        data: {
+          conversationId: conversation.id,
+          clientMessageId: data.clientMessageId,
+          sequence: 1,
+          status: 'queued',
+          input: data.message,
+        },
+      })
+      const userMessage = await tx.message.create({
+        data: {
+          conversationId: conversation.id,
+          runId: run.id,
+          role: 'user',
+          content: data.message,
+        },
+      })
+      const startedEvent = await appendTimelineEvent(tx, conversation.id, run.id, 'turn.started', {
+        title: data.title,
+        userMessageId: userMessage.id,
+        userText: data.message,
+        assistantMessageId: run.id,
+      })
+      return { conversation: { ...conversation, runtimeStatus: 'queued' as const }, run, startedEvent }
+    })
+  }
+
+  async listChildrenOf(parentConversationId: string) {
+    const conversations = await prisma.conversation.findMany({
+      where: { parentConversationId, status: 'active' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        runs: {
+          select: { status: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    })
+    return conversations.map(({ runs, ...conversation }) => withRuntimeStatus(conversation, runs))
   }
 
   async createInitialTurn(data: TurnCreation) {

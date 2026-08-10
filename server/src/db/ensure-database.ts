@@ -20,12 +20,17 @@ const TABLES = [
     "title" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'active',
     "agentProfile" TEXT NOT NULL DEFAULT 'coding',
+    "parentConversationId" TEXT,
+    "parentRunId" TEXT,
+    "parentToolCallId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "nextRunSequence" INTEGER NOT NULL DEFAULT 0,
     "activeRunId" TEXT,
     CONSTRAINT "Conversation_projectId_fkey"
-      FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Conversation_parentConversationId_fkey"
+      FOREIGN KEY ("parentConversationId") REFERENCES "Conversation"("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
   `CREATE INDEX IF NOT EXISTS "Conversation_projectId_updatedAt_idx"
     ON "Conversation"("projectId", "updatedAt")`,
@@ -205,6 +210,9 @@ async function initializeDatabase() {
   await addColumnIfMissing('AgentRun', 'lastHeartbeatAt', 'DATETIME')
   await addColumnIfMissing('Conversation', 'nextRunSequence', 'INTEGER NOT NULL DEFAULT 0')
   await addColumnIfMissing('Conversation', 'activeRunId', 'TEXT')
+  await addColumnIfMissing('Conversation', 'parentConversationId', 'TEXT')
+  await addColumnIfMissing('Conversation', 'parentRunId', 'TEXT')
+  await addColumnIfMissing('Conversation', 'parentToolCallId', 'TEXT')
   await addColumnIfMissing('AgentRun', 'sequence', 'INTEGER NOT NULL DEFAULT 0')
   await addColumnIfMissing('AgentSession', 'status', 'TEXT NOT NULL DEFAULT \'active\'')
   await addColumnIfMissing('AgentSession', 'lastActivityAt', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP')

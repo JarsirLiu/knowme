@@ -26,6 +26,8 @@ interface WorkspaceActions {
   selectConversation: (conversationId: string, projectId: string) => void
   newConversation: (projectId: string) => void
   handleConversationCreated: (data: { conversationId: string; title: string; draftId: string; projectId: string }) => void
+  fetchConversation: (conversationId: string) => Promise<string | null>
+  addConversation: (conversation: Conversation) => void
 }
 
 type WorkspaceStore = WorkspaceState & WorkspaceActions
@@ -149,6 +151,38 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         ...(state.active?.kind === 'draft' && state.active.draftId === data.draftId
           ? { active: { kind: 'persisted', conversationId: data.conversationId, projectId: data.projectId } }
           : {}),
+      }
+    })
+  },
+
+  fetchConversation: async (conversationId) => {
+    try {
+      const timeline = await client.getTimeline(conversationId)
+      const conversation = timeline.conversation
+      const state = get()
+      const existing = state.conversationsByProject[conversation.projectId] ?? []
+      if (existing.some((c) => c.id === conversationId)) return conversation.projectId
+      set((current) => ({
+        conversationsByProject: {
+          ...current.conversationsByProject,
+          [conversation.projectId]: [conversation as Conversation, ...existing],
+        },
+      }))
+      return conversation.projectId
+    } catch {
+      return null
+    }
+  },
+
+  addConversation: (conversation) => {
+    set((state) => {
+      const existing = state.conversationsByProject[conversation.projectId] ?? []
+      if (existing.some((c) => c.id === conversation.id)) return state
+      return {
+        conversationsByProject: {
+          ...state.conversationsByProject,
+          [conversation.projectId]: [conversation, ...existing],
+        },
       }
     })
   },

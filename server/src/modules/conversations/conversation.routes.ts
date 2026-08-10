@@ -54,4 +54,10 @@ export function registerConversationRoutes(
       reply,
     )
   })
+
+  app.get('/api/conversations/:conversationId/children', async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string }
+    const children = await conversationService.listChildren(conversationId)
+    return reply.send({ conversations: children })
+  })
 }

@@ -46,6 +46,9 @@ export function useConversationEventSubscriptions(
         for await (const event of client.subscribeConversationEvents(conversationId, controller.signal, lastEventId)) {
           if (controller.signal.aborted) return
           dispatchFor(key, { type: 'TIMELINE_EVENT', event })
+          if (event.type === 'subagent.started' && event.data.childConversationId) {
+            subscribeConversation(event.data.childConversationId)
+          }
         }
       } catch (error) {
         if (!controller.signal.aborted) {

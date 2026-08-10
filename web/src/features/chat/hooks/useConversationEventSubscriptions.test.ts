@@ -174,4 +174,35 @@ describe('useConversationEventSubscriptions', () => {
       expect(errorCall).toBeDefined()
     })
   })
+
+  it('auto-subscribes to a child conversation on subagent.started', async () => {
+    const client = createMockClient()
+    client.getTimeline.mockResolvedValue({
+      conversation: { runtimeStatus: 'running' },
+      events: [],
+    })
+
+    async function* generateEvents() {
+      yield makeEvent('subagent.started', {
+        data: { childConversationId: 'child-1', title: 'Explore', toolCallId: 'tool-1' },
+        sequence: 1,
+      })
+    }
+    client.subscribeConversationEvents.mockReturnValue(generateEvents())
+
+    const dispatchFor = vi.fn()
+    const clearStateFor = vi.fn()
+
+    const { result } = renderHook(() =>
+      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+    )
+
+    await act(async () => {
+      result.current.subscribeConversation('conv-1')
+    })
+
+    await vi.waitFor(() => {
+      expect(client.getTimeline).toHaveBeenCalledWith('child-1')
+    })
+  })
 })

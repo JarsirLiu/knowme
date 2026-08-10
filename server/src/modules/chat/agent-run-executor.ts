@@ -8,11 +8,12 @@ import { TimelineEventStore } from '../events/timeline-event-store.js'
 import type { Session } from '@openai/agents'
 import { estimateTokens } from '../history/session-compaction.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
-import { getToolCallId, persistRunStreamEvent, type StreamEventState } from './stream-event-mapper.js'
+import { getToolCallId, persistRunStreamEvent } from './stream-event-mapper.js'
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
 import { PrismaAgentRunRepository, type AgentRunRepository } from '../runs/agent-run-repository.js'
 import { ProjectService } from '../projects/project.service.js'
 import { seedBuiltinSkills } from '../projects/builtin-skills.js'
+import { SubagentDelegateService } from './subagent-delegate.service.js'
 
 type PersistedRunState = RunState<unknown, CodingAgentInstance>
 type RunInput = string | PersistedRunState
@@ -26,6 +27,8 @@ type AgentStream = AsyncIterable<RunStreamEvent> & {
 }
 
 export class AgentRunExecutor {
+  private currentDelegateToolCallId?: string
+
   constructor(
     private readonly conversationService: ConversationService,
     private readonly approvalService: ApprovalService,
@@ -34,6 +37,7 @@ export class AgentRunExecutor {
     private readonly projectReader: ProjectReader = new ProjectService(),
     private readonly runtime: AgentRuntime = new DefaultAgentRuntime(),
     private readonly sessionFactory: AgentSessionFactory = new DefaultAgentSessionFactory(),
+    private readonly subagentDelegate?: SubagentDelegateService,
   ) {}
 
   async execute(runId: string, signal: AbortSignal, resumed: boolean, leaseOwner: string): Promise<'completed' | 'waiting_approval'> {
@@ -45,7 +49,19 @@ export class AgentRunExecutor {
     const project = await this.projectReader.get(conversation.projectId)
     await seedBuiltinSkills().catch(() => undefined)
 
-    const agent = await this.runtime.createAgent(project.rootPath)
+    const delegateHandler = this.subagentDelegate
+      ? (input: import('@superagent/agent').DelegateInput) =>
+          this.subagentDelegate!.delegate(input, {
+            conversationId: conversation.id,
+            parentRunId: runId,
+            toolCallId: this.currentDelegateToolCallId,
+          })
+      : undefined
+    const agentType = conversation.parentConversationId ? 'explore' : 'main'
+    const agent = await this.runtime.createAgent(project.rootPath, {
+      delegateHandler,
+      agentType,
+    })
     const sessionId = await this.conversationService.getSessionId(conversation.id)
     const session = this.sessionFactory.createSession(sessionId, {
       started: async ({ id, trigger }) => {
@@ -91,7 +107,7 @@ export class AgentRunExecutor {
         },
       })
 
-      const streamState: StreamEventState = { activeSubAgentToolCallId: null }
+      const streamState: import('./stream-event-mapper.js').StreamEventState = {}
       await this.consumeStream(stream, conversation.id, runId, streamState, leaseOwner)
 
       const interruptions = stream.interruptions
@@ -152,11 +168,24 @@ export class AgentRunExecutor {
     stream: AgentStream,
     conversationId: string,
     runId: string,
-    streamState: StreamEventState,
+    streamState: import('./stream-event-mapper.js').StreamEventState,
     leaseOwner: string,
   ) {
     for await (const event of stream as AsyncIterable<RunStreamEvent>) {
       await persistRunStreamEvent(this.timelineStore, conversationId, runId, event, streamState, leaseOwner)
+      if (event.type === 'run_item_stream_event'
+        && event.name === 'tool_called'
+        && event.item?.type === 'tool_call_item'
+      ) {
+        const raw = event.item.rawItem
+        if (raw && typeof raw === 'object' && (raw as { name?: unknown }).name === 'delegate') {
+          const tcId = getToolCallId(raw as Record<string, unknown>)
+          this.currentDelegateToolCallId = tcId === 'unknown' ? undefined : tcId
+        }
+      }
+      if (event.type === 'run_item_stream_event' && event.name === 'tool_output') {
+        this.currentDelegateToolCallId = undefined
+      }
       await this.runRepository.heartbeatIfOwned(runId, leaseOwner)
     }
     await stream.completed

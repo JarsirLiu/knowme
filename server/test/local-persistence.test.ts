@@ -12,7 +12,6 @@ import { PrismaAgentSession } from '../src/modules/history/agent-session-store.j
 import { persistCompactionMessage } from '../src/modules/history/session-compaction.js'
 import { ProjectService } from '../src/modules/projects/project.service.js'
 import { extractRawStreamDelta, extractRunItemStreamDelta } from '../src/modules/chat/stream-event-mapper.js'
-import type { StreamEventState } from '../src/modules/chat/stream-event-mapper.js'
 import { RunCoordinator } from '../src/modules/runs/run-coordinator.js'
 import { PrismaRunLifecycleRepository } from '../src/modules/runs/run-lifecycle-repository.js'
 import { RunScheduler } from '../src/modules/runs/run-scheduler.js'
@@ -183,14 +182,13 @@ test('maps custom_tool_call_input.delta to tool.arguments.delta', () => {
 })
 
 test('maps run_item tool_called to tool.called and tool.arguments', () => {
-  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_called',
     item: {
       type: 'tool_call_item',
       rawItem: { callId: 'call_abc', name: 'read_file', arguments: '{"path":"README.md"}' },
     },
-  } as any, 'run-1', state)
+  } as any, 'run-1')
   assert.deepEqual(result, {
     type: 'tool.called',
     data: { messageId: 'run-1', toolCallId: 'call_abc', name: 'read_file' },
@@ -198,14 +196,13 @@ test('maps run_item tool_called to tool.called and tool.arguments', () => {
 })
 
 test('maps run_item tool_output to tool.output', () => {
-  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_output',
     item: {
       type: 'tool_call_output_item',
       rawItem: { callId: 'call_abc', output: 'file content' },
     },
-  } as any, 'run-2', state)
+  } as any, 'run-2')
   assert.deepEqual(result, {
     type: 'tool.output',
     data: { toolCallId: 'call_abc', result: 'file content' },
@@ -213,7 +210,6 @@ test('maps run_item tool_output to tool.output', () => {
 })
 
 test('unwraps the Agent SDK text envelope from tool output', () => {
-  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   const result = extractRunItemStreamDelta({
     name: 'tool_output',
     item: {
@@ -226,7 +222,7 @@ test('unwraps the Agent SDK text envelope from tool output', () => {
         },
       },
     },
-  } as any, 'run-shell', state)
+  } as any, 'run-shell')
   assert.deepEqual(result, {
     type: 'tool.output',
     data: { toolCallId: 'call_shell', result: 'fatal: not a git repository\nCommand exited with code 1.' },
@@ -234,12 +230,11 @@ test('unwraps the Agent SDK text envelope from tool output', () => {
 })
 
 test('ignores unmatched run_item events', () => {
-  const state: StreamEventState = { sawReasoningDelta: false, activeSubAgentToolCallId: null }
   assert.equal(
     extractRunItemStreamDelta({
       name: 'unknown_event',
       item: { type: 'unknown_item', rawItem: {} },
-    } as any, 'run-3', state),
+    } as any, 'run-3'),
     null,
   )
 })

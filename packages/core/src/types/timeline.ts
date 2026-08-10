@@ -21,6 +21,8 @@ export type TimelineEventType =
   | 'tool.output'
   | 'tool.denied'
   | 'tool.failed'
+  | 'subagent.started'
+  | 'subagent.completed'
   | 'context_compaction.started'
   | 'context_compaction.completed'
   | 'context_compaction.failed'
@@ -47,16 +49,18 @@ export interface TimelineEventPayloadMap {
     source: string
   }
   'request.error': { message: string }
-  'message.delta': { messageId: string; text: string; sourceToolCallId?: string }
-  'reasoning.delta': { messageId: string; text: string; sourceToolCallId?: string }
-  'tool.called': { messageId: string; toolCallId: string; name: string; sourceToolCallId?: string }
-  'tool.arguments': { toolCallId: string; args: unknown; sourceToolCallId?: string }
-  'tool.arguments.delta': { toolCallId: string; delta: string; sourceToolCallId?: string }
+  'message.delta': { messageId: string; text: string }
+  'reasoning.delta': { messageId: string; text: string }
+  'tool.called': { messageId: string; toolCallId: string; name: string }
+  'tool.arguments': { toolCallId: string; args: unknown }
+  'tool.arguments.delta': { toolCallId: string; delta: string }
   'tool.awaiting_approval': { toolCallId: string; name: string; args: unknown }
   'tool.approved': { toolCallId: string }
-  'tool.output': { toolCallId: string; result: unknown; sourceToolCallId?: string }
+  'tool.output': { toolCallId: string; result: unknown }
   'tool.denied': { toolCallId: string }
   'tool.failed': { toolCallId: string; error: string }
+  'subagent.started': { childConversationId: string; title: string; toolCallId: string }
+  'subagent.completed': { childConversationId: string; result: string }
   'context_compaction.started': { id: string; trigger: 'auto' | 'manual' }
   'context_compaction.completed': {
     id: string

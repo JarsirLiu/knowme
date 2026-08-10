@@ -1,0 +1,116 @@
+.sac {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  min-height: 40px;
+  max-width: 100%;
+  overflow: hidden;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.sac:has(.sacNav):hover {
+  background: #eef2ff;
+  cursor: pointer;
+}
+
+.sac.sacRunning {
+  background: #f0f4ff;
+  border-color: #c7d2fe;
+}
+
+.sac.sacDone {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.sac.sacError {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sacIcon {
+  flex-shrink: 0;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+}
+
+.sac.sacDone .sacIcon {
+  color: #166534;
+}
+
+.sac.sacError .sacIcon {
+  color: #991b1b;
+}
+
+.sacName {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1e293b;
+  flex-shrink: 0;
+}
+
+.sacType {
+  font-size: 12px;
+  color: #6366f1;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eef2ff;
+  flex-shrink: 0;
+}
+
+.sacDesc {
+  font-size: 13px;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sacStatus {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+}
+
+.sac.sacDone .sacStatus {
+  color: #166534;
+}
+
+.sac.sacError .sacStatus {
+  color: #991b1b;
+}
+
+.sac.sacRunning .sacStatus {
+  color: #6366f1;
+}
+
+.sacDots {
+  animation: spin 1.2s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.sacNav {
+  flex-shrink: 0;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+}
+
+.sac:has(.sacNav):hover .sacNav {
+  color: #4338ca;
+}

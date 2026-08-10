@@ -2,20 +2,16 @@ import type { Tool } from '@openai/agents'
 import { chatCompletionsPatchTool, chatCompletionsShellTool } from './chat-completions-tools.js'
 import { webFetch } from './web-fetch.js'
 
-export function createTools(cfg: { workspace: string }): Tool[] {
-  return [
+export function createTools(cfg: { workspace: string }, opts?: { excludeEdit?: boolean }): Tool[] {
+  const tools: Tool[] = [
     chatCompletionsShellTool(cfg.workspace),
-    chatCompletionsPatchTool(cfg.workspace),
+    ...(opts?.excludeEdit ? [] : [chatCompletionsPatchTool(cfg.workspace)]),
     webFetch(),
   ]
+  return tools
 }
 
-export function createReadOnlyTools(workspace: string): Tool[] {
-  return [
-    chatCompletionsShellTool(workspace),
-  ]
-}
+export { chatCompletionsShellTool, chatCompletionsPatchTool } from './chat-completions-tools.js'
 
-export function createReviewTools(workspace: string): Tool[] {
-  return createReadOnlyTools(workspace)
-}
+export { createDelegateTool } from './delegate-tool.js'
+export type { DelegateHandler, DelegateInput } from './delegate-tool.js'

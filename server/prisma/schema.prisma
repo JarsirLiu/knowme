@@ -18,21 +18,26 @@ model Project {
 }
 
 model Conversation {
-  id           String        @id @default(cuid())
-  projectId    String
-  title        String
-  status       String        @default("active")
-  agentProfile String        @default("coding")
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  nextRunSequence Int        @default(0)
-  activeRunId  String?
-  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  agentSession AgentSession?
-  messages     Message[]
-  runs         AgentRun[]
-  timelineSequence TimelineSequence?
-  timelineEvents TimelineEvent[]
+  id                   String        @id @default(cuid())
+  projectId            String
+  title                String
+  status               String        @default("active")
+  agentProfile         String        @default("coding")
+  parentConversationId String?
+  parentRunId          String?
+  parentToolCallId     String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  nextRunSequence      Int           @default(0)
+  activeRunId          String?
+  project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentConversation   Conversation? @relation("ChildConversations", fields: [parentConversationId], references: [id], onDelete: SetNull)
+  childConversations   Conversation[] @relation("ChildConversations")
+  agentSession         AgentSession?
+  messages             Message[]
+  runs                 AgentRun[]
+  timelineSequence     TimelineSequence?
+  timelineEvents       TimelineEvent[]
 
   @@index([projectId, updatedAt])
   @@unique([activeRunId])

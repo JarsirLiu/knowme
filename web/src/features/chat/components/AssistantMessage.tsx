@@ -1,6 +1,7 @@
 import type { AssistantMessage as AssistantMessageType } from '../types'
 import { ContextCompactionMessage, TextMessage, ReasoningMessage } from '../messages'
 import { ToolCallList } from './ToolCallItem'
+import { SubAgentCard } from './SubAgentCard'
 import { ApprovalBar } from './ApprovalBar'
 import { ThinkingState } from './ThinkingState'
 import styles from './AssistantMessage.module.css'
@@ -17,6 +18,7 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
   const reasoningStreaming = message.status === 'streaming' &&
     message.content.length > 0 &&
     message.content[message.content.length - 1].type === 'reasoning'
+
   const parts = message.parts.length > 0
     ? message.parts
     : [
@@ -37,7 +39,11 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
               }
               if (part.type === 'tool') {
                 const toolCall = message.toolCalls.find((tool) => tool.id === part.callId)
-                return toolCall ? <ToolCallList key={`tool-${part.callId}`} toolCalls={[toolCall]} /> : null
+                if (!toolCall) return null
+                if (toolCall.name === 'delegate') {
+                  return <SubAgentCard key={`delegate-${part.callId}`} toolCall={toolCall} />
+                }
+                return <ToolCallList key={`tool-${part.callId}`} toolCalls={[toolCall]} />
               }
               return part.content.type === 'text'
                 ? <TextMessage key={`text-${i}`} content={part.content.text} />

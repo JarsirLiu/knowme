@@ -2,14 +2,20 @@ import { Agent, setTracingDisabled } from '@openai/agents'
 import { aisdk } from '@openai/agents-extensions/ai-sdk'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { loadConfig } from './config.js'
-import { createReadOnlyTools, createReviewTools, createTools } from './tools/index.js'
-import { getInstructions, getExplorerInstructions, getReviewerInstructions } from './instructions.js'
+import { createTools } from './tools/index.js'
+import { createDelegateTool, type DelegateHandler } from './tools/delegate-tool.js'
+import { getInstructions, type AgentType } from './instructions.js'
 import { createSkillTools } from './skills/index.js'
+import { exploreAgentPrompt } from './prompts/templates/explore-agent.js'
 
 
 export interface CodingAgent {
   agent: Agent
   cfg: ReturnType<typeof loadConfig>
+}
+
+export function getExploreAgentPrompt(): string {
+  return exploreAgentPrompt()
 }
 
 function createTimedFetch(timeoutMs: number): typeof fetch {
@@ -31,8 +37,14 @@ function createTimedFetch(timeoutMs: number): typeof fetch {
   }
 }
 
-export async function createCodingAgent(overrides: Partial<ReturnType<typeof loadConfig>> = {}): Promise<CodingAgent> {
+export async function createCodingAgent(
+  overrides: Partial<ReturnType<typeof loadConfig>> & {
+    delegateHandler?: DelegateHandler
+    agentType?: AgentType
+  } = {},
+): Promise<CodingAgent> {
   const cfg = { ...loadConfig(), ...overrides }
+  const agentType = overrides.agentType ?? 'main'
 
   setTracingDisabled(true)
 
@@ -45,48 +57,22 @@ export async function createCodingAgent(overrides: Partial<ReturnType<typeof loa
 
   const model = aisdk(provider.chatModel(cfg.model))
 
-  const explorerAgent = new Agent({
-    name: 'Project Explorer',
-    model,
-    instructions: getExplorerInstructions(),
-    tools: createReadOnlyTools(cfg.workspace),
-  })
-
-  const reviewerAgent = new Agent({
-    name: 'Code Reviewer',
-    model,
-    instructions: getReviewerInstructions(),
-    tools: createReviewTools(cfg.workspace),
-  })
-
-  const tools = createTools(cfg)
-
-  const instructions = getInstructions()
+  const tools = createTools(cfg, agentType === 'explore' ? { excludeEdit: true } : undefined)
+  const instructions = getInstructions(agentType)
   const skillManagerTools = createSkillTools(cfg.workspace)
 
+  const delegateTool = overrides.delegateHandler
+    ? createDelegateTool(overrides.delegateHandler)
+    : undefined
+
   const agent = new Agent({
-    name: 'SuperAgent',
+    name: agentType === 'explore' ? 'SuperAgent/Explore' : 'SuperAgent',
     model,
     instructions,
     tools: [
       ...tools,
       ...skillManagerTools,
-      explorerAgent.asTool({
-        toolName: 'explore_project',
-        toolDescription:
-          'Inspect the current workspace in read-only mode and return a concise project map, relevant files, and implementation risks. Use before making unfamiliar changes.',
-        runOptions: {
-          maxTurns: null,
-        },
-      }),
-      reviewerAgent.asTool({
-        toolName: 'review_code_quality',
-        toolDescription:
-          'Perform an independent, read-only quality review of the current project or recent changes. Check correctness, architecture, compatibility debt, persistence, security, tests, operations, and user-facing contracts. Return prioritized findings with concrete evidence and fixes.',
-        runOptions: {
-          maxTurns: null,
-        },
-      }),
+      ...(delegateTool && agentType !== 'explore' ? [delegateTool] : []),
     ],
   })
 

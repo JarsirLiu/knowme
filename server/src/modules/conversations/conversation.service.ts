@@ -145,4 +145,21 @@ export class ConversationService {
   getSessionId(conversationId: string) {
     return this.repository.getSessionId(conversationId)
   }
+
+  async createChildSession(data: {
+    projectId: string
+    parentConversationId: string
+    parentRunId: string
+    message: string
+    clientMessageId: string
+    title: string
+  }) {
+    const result = await this.repository.createChildTurn(data)
+    this.timelineStore.publish(result.startedEvent)
+    return result
+  }
+
+  async listChildren(conversationId: string) {
+    return this.repository.listChildrenOf(conversationId)
+  }
 }

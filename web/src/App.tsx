@@ -9,6 +9,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<ChatPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="chat/:conversationId" element={<ChatPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

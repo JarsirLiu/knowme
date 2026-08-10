@@ -3,13 +3,23 @@ import styles from './Header.module.css'
 type HeaderProps = {
   title: string
   onOpenNavigation?: () => void
+  parentTitle?: string
+  onBack?: () => void
 }
 
-export function Header({ title, onOpenNavigation }: HeaderProps) {
+export function Header({ title, onOpenNavigation, parentTitle, onBack }: HeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
-        {onOpenNavigation && (
+        {onBack && (
+          <button className={styles.backButton} type="button" onClick={onBack} aria-label="返回父会话">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span className={styles.backLabel}>{parentTitle ?? '返回'}</span>
+          </button>
+        )}
+        {onOpenNavigation && !onBack && (
           <button className={styles.menuButton} type="button" onClick={onOpenNavigation} aria-label="打开项目导航">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />

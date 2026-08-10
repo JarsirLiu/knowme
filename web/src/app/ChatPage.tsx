@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Header, InputBar, MessageList, useAgentChat } from '@/features/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUIStore } from '@/stores/ui'
@@ -8,21 +9,54 @@ import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/Director
 import type { SkillInfo } from '@superagent/core'
 import styles from './ChatPage.module.css'
 
+function findParentConversation(
+  conversationsByProject: Record<string, unknown[]>,
+  parentId: string,
+): string | undefined {
+  for (const conversations of Object.values(conversationsByProject)) {
+    for (const c of conversations) {
+      const conv = c as { id: string; title: string }
+      if (conv.id === parentId) return conv.title
+    }
+  }
+  return undefined
+}
+
 export default function ChatPage() {
+  const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false)
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null)
   const [creatingProject, setCreatingProject] = useState(false)
   const [skills, setSkills] = useState<SkillInfo[]>([])
+  const { conversationId: urlConversationId } = useParams<{ conversationId: string }>()
 
   const active = useWorkspaceStore((state) => state.active)
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
   const createProject = useWorkspaceStore((state) => state.createProject)
   const handleConversationCreated = useWorkspaceStore((state) => state.handleConversationCreated)
+  const selectConversation = useWorkspaceStore((state) => state.selectConversation)
+  const fetchConversation = useWorkspaceStore((state) => state.fetchConversation)
   const projectModalOpen = useUIStore((state) => state.projectModalOpen)
   const setProjectModalOpen = useUIStore((state) => state.setProjectModalOpen)
   const setMobileNavOpen = useUIStore((state) => state.setMobileNavOpen)
   const setConversationRuntimeStatuses = useUIStore((state) => state.setConversationRuntimeStatuses)
+
+  // When a URL param is present, select that conversation automatically.
+  useEffect(() => {
+    if (!urlConversationId) return
+    for (const [projectId, conversations] of Object.entries(conversationsByProject)) {
+      const found = conversations.find((c) => c.id === urlConversationId)
+      if (found) {
+        selectConversation(urlConversationId, projectId)
+        return
+      }
+    }
+    // Not yet in the store (e.g. a child session created during a delegate call).
+    void fetchConversation(urlConversationId).then((projectId) => {
+      if (projectId) selectConversation(urlConversationId, projectId)
+    })
+  }, [urlConversationId, conversationsByProject, selectConversation, fetchConversation])
 
   const activeConversationIds = useMemo(
     () => Object.values(conversationsByProject)
@@ -115,9 +149,34 @@ export default function ChatPage() {
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
     : '新任务'
 
+  const activeConversation = active?.kind === 'persisted'
+    ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)
+    : undefined
+
+  const parentConversationId = activeConversation && (activeConversation as { parentConversationId?: string | null }).parentConversationId
+    ? (activeConversation as { parentConversationId?: string | null }).parentConversationId
+    : undefined
+  const isChildSession = !!parentConversationId
+  const parentTitle = isChildSession
+    ? findParentConversation(conversationsByProject, parentConversationId!)
+    : undefined
+
+  const handleBack = useCallback(() => {
+    if (parentConversationId) {
+      navigate(`/chat/${parentConversationId}`)
+    }
+  }, [parentConversationId, navigate])
+
+  const inputBarVisible = !isChildSession
+
   return (
     <main className={styles.mainPane}>
-      <Header title={activeTitle} onOpenNavigation={() => setMobileNavOpen(true)} />
+      <Header
+        title={activeTitle}
+        onOpenNavigation={!isChildSession ? () => setMobileNavOpen(true) : undefined}
+        parentTitle={parentTitle}
+        onBack={isChildSession ? handleBack : undefined}
+      />
 
       {error && <div className={styles.errorBanner}>{error}</div>}
 
@@ -128,16 +187,29 @@ export default function ChatPage() {
         onDeny={denyTool}
       />
 
-      <InputBar
-        value={input}
-        onChange={setInput}
-        onSend={handleSend}
-        onStop={stop}
-        onCompact={compactContext}
-        isLoading={isLoading}
-        placeholder="Do anything"
-        skills={skills}
-      />
+      {inputBarVisible && (
+        <InputBar
+          value={input}
+          onChange={setInput}
+          onSend={handleSend}
+          onStop={stop}
+          onCompact={compactContext}
+          isLoading={isLoading}
+          placeholder="Do anything"
+          skills={skills}
+        />
+      )}
+
+      {isChildSession && (
+        <div className={styles.childFooter}>
+          <button className={styles.backButton} onClick={handleBack}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>{parentTitle ? `返回 ${parentTitle}` : '返回主会话'}</span>
+          </button>
+        </div>
+      )}
 
       <ProjectModal
         open={projectModalOpen}

@@ -1,7 +1,9 @@
 import { mainAgentPrompt } from './prompts/templates/main-agent.js'
-import { explorerPrompt } from './prompts/templates/explorer.js'
-import { reviewerPrompt } from './prompts/templates/reviewer.js'
+import { exploreAgentPrompt } from './prompts/templates/explore-agent.js'
 
-export const getInstructions = mainAgentPrompt
-export const getExplorerInstructions = explorerPrompt
-export const getReviewerInstructions = reviewerPrompt
+export type AgentType = 'main' | 'explore'
+
+export function getInstructions(type: AgentType = 'main'): string {
+  if (type === 'explore') return exploreAgentPrompt()
+  return mainAgentPrompt()
+}

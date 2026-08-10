@@ -28,6 +28,7 @@ import { PrismaApprovalRepository } from './approvals/approval-repository.js'
 import { PrismaAgentSessionLifecycleRepository } from './history/session-lifecycle-repository.js'
 import { RunScheduler } from './runs/run-scheduler.js'
 import { PrismaRunLifecycleRepository } from './runs/run-lifecycle-repository.js'
+import { SubagentDelegateService } from './chat/subagent-delegate.service.js'
 
 export function registerRoutes(app: FastifyInstance) {
   const projectService = new ProjectService(new PrismaProjectRepository(), new ProjectPathValidator())
@@ -45,6 +46,16 @@ export function registerRoutes(app: FastifyInstance) {
   const deviceService = new DeviceService()
   const agentRunRepository = new PrismaAgentRunRepository(sessionLifecycleRepository)
   const agentSessionFactory = new DefaultAgentSessionFactory()
+
+  // Break circular dependency: delegate service gets a callback instead of coordinator directly.
+  let coordinator: RunCoordinator
+  const delegateService = new SubagentDelegateService(
+    conversationService,
+    timelineStore,
+    (runId) => coordinator.enqueue(runId),
+    agentRunRepository,
+    approvalService,
+  )
   const agentExecutor = new AgentRunExecutor(
     conversationService,
     approvalService,
@@ -53,8 +64,9 @@ export function registerRoutes(app: FastifyInstance) {
     projectService,
     new DefaultAgentRuntime(),
     agentSessionFactory,
+    delegateService,
   )
-  const coordinator = new RunCoordinator(
+  coordinator = new RunCoordinator(
     conversationService,
     approvalService,
     timelineStore,
