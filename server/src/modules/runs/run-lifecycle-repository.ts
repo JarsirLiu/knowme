@@ -68,6 +68,15 @@ export class PrismaRunLifecycleRepository {
     return event
   }
 
+  /** Returns the ids of runs spawned by the given parent run that are still active. */
+  async findChildRunIds(parentRunId: string): Promise<string[]> {
+    const childConversations = await prisma.conversation.findMany({
+      where: { parentRunId },
+      select: { runs: { where: { status: { in: ACTIVE_RUN_STATUSES } }, select: { id: true } } },
+    })
+    return childConversations.flatMap((c) => c.runs.map((r) => r.id))
+  }
+
   async findWaitingIds() {
     return prisma.agentRun.findMany({
       where: { status: 'waiting_approval', state: { not: null } },

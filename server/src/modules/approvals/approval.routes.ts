@@ -19,7 +19,7 @@ export function registerApprovalRoutes(app: FastifyInstance, approvalService: Ap
 
   app.post('/api/conversations/:conversationId/runs/:runId/cancel', async (req, reply) => {
     const { conversationId, runId } = req.params as { conversationId: string; runId: string }
-    const run = await coordinator.cancel(runId)
+    const run = await coordinator.cancelWithChildren(runId)
     if (!run) return reply.status(404).send({ error: 'Run not found or already finished' })
     return reply.send({ success: true, conversationId })
   })

@@ -79,6 +79,15 @@ export class RunCoordinator {
     return true
   }
 
+  /** Cancels a run and every run it spawned, so delegated sub-agents stop too. */
+  async cancelWithChildren(runId: string): Promise<boolean> {
+    const cancelled = await this.cancel(runId)
+    if (!cancelled) return false
+    const childRunIds = await this.lifecycleRepository.findChildRunIds(runId)
+    await Promise.all(childRunIds.map((childId) => this.cancelWithChildren(childId)))
+    return true
+  }
+
   private async tick(): Promise<void> {
     if (this.stopping || this.ticking) return
     this.ticking = true
