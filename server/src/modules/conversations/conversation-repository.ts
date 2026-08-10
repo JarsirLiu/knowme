@@ -53,7 +53,7 @@ export class PrismaConversationRepository implements ConversationRepository {
 
   async list(projectId: string) {
     const conversations = await prisma.conversation.findMany({
-      where: { projectId, status: 'active' },
+      where: { projectId, status: 'active', parentConversationId: null },
       orderBy: { updatedAt: 'desc' },
       include: {
         runs: {
