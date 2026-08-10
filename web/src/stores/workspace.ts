@@ -47,7 +47,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       )
       const nextConversations = Object.fromEntries(pairs)
       const firstProject = nextProjects[0]
-      const firstConversation = firstProject ? nextConversations[firstProject.id]?.[0] : undefined
+      const firstConversation = firstProject
+        ? nextConversations[firstProject.id]?.find((c) => !c.parentConversationId)
+        : undefined
 
       set({
         projects: nextProjects,
@@ -97,8 +99,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       },
       ...(deletingActive
         ? {
-            active: nextConversations[0]
-              ? { kind: 'persisted', conversationId: nextConversations[0].id, projectId }
+            active: nextConversations.find((c) => !c.parentConversationId)
+              ? { kind: 'persisted', conversationId: nextConversations.find((c) => !c.parentConversationId)!.id, projectId }
               : createDraft(projectId),
           }
         : {}),
@@ -107,7 +109,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   selectProject: (projectId) => {
     const state = get()
-    const firstConversation = state.conversationsByProject[projectId]?.[0]
+    const firstConversation = state.conversationsByProject[projectId]?.find((c) => !c.parentConversationId)
     set({
       activeProjectId: projectId,
       active: firstConversation

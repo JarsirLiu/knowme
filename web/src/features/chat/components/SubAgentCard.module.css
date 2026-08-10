@@ -10,12 +10,16 @@
   max-width: 100%;
   overflow: hidden;
   cursor: default;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.sac:has(.sacNav) {
+  cursor: pointer;
 }
 
 .sac:has(.sacNav):hover {
   background: #eef2ff;
-  cursor: pointer;
+  border-color: #c7d2fe;
 }
 
 .sac.sacRunning {
@@ -23,9 +27,18 @@
   border-color: #c7d2fe;
 }
 
+.sac.sacRunning:has(.sacNav):hover {
+  background: #dce4fd;
+}
+
 .sac.sacDone {
   background: #f0fdf4;
   border-color: #bbf7d0;
+}
+
+.sac.sacDone:has(.sacNav):hover {
+  background: #dcfce7;
+  border-color: #86efac;
 }
 
 .sac.sacError {
@@ -109,8 +122,11 @@
   color: #6366f1;
   display: flex;
   align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s;
 }
 
 .sac:has(.sacNav):hover .sacNav {
+  opacity: 1;
   color: #4338ca;
 }

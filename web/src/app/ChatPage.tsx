@@ -15,8 +15,8 @@ function findParentConversation(
 ): string | undefined {
   for (const conversations of Object.values(conversationsByProject)) {
     for (const c of conversations) {
-      const conv = c as { id: string; title: string }
-      if (conv.id === parentId) return conv.title
+      const conv = c as { id: string; title: string; parentConversationId?: string | null }
+      if (conv.id === parentId && !conv.parentConversationId) return conv.title
     }
   }
   return undefined

@@ -26,6 +26,9 @@ export function SubAgentCard({ toolCall }: { toolCall: ToolCall }) {
     <div
       className={`${styles.sac} ${isCompleted ? styles.sacDone : ''} ${isError ? styles.sacError : ''} ${isRunning ? styles.sacRunning : ''}`}
       onClick={childConversationId ? handleClick : undefined}
+      title={childConversationId ? '进入子会话' : undefined}
+      role={childConversationId ? 'button' : undefined}
+      tabIndex={childConversationId ? 0 : undefined}
     >
       <span className={styles.sacIcon}>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -61,7 +64,7 @@ export function SubAgentCard({ toolCall }: { toolCall: ToolCall }) {
         )}
       </span>
       {childConversationId && (
-        <span className={styles.sacNav}>
+        <span className={styles.sacNav} title="进入子会话">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
             <polyline points="15 3 21 3 21 9" />

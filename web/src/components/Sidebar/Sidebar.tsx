@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MessageSquarePlus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ActiveConversation } from '@/stores/workspace'
@@ -20,6 +21,7 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ width }: SidebarProps) {
+  const navigate = useNavigate()
   const projects = useWorkspaceStore((state) => state.projects)
   const conversationsByProject = useWorkspaceStore((state) => state.conversationsByProject)
   const activeProjectId = useWorkspaceStore((state) => state.activeProjectId)
@@ -84,13 +86,15 @@ export function Sidebar({ width }: SidebarProps) {
 
   const handleSelectConversation = useCallback((conversationId: string, projectId: string) => {
     selectConversation(conversationId, projectId)
+    navigate(`/chat/${conversationId}`)
     setMobileNavOpen(false)
-  }, [selectConversation, setMobileNavOpen])
+  }, [selectConversation, navigate, setMobileNavOpen])
 
   const handleNewConversation = useCallback((projectId: string) => {
     newConversation(projectId)
+    navigate('/chat')
     setMobileNavOpen(false)
-  }, [newConversation, setMobileNavOpen])
+  }, [newConversation, navigate, setMobileNavOpen])
 
   const handleDelete = useCallback((conversationId: string, projectId: string, title: string) => {
     if (deletingConversationId) return
@@ -134,8 +138,10 @@ export function Sidebar({ width }: SidebarProps) {
       </div>
 
       <div className={styles.projectList}>
-        {projects.map((project) => {
-          const conversations = conversationsByProject[project.id] ?? []
+      {projects.map((project) => {
+      const conversations = (conversationsByProject[project.id] ?? []).filter(
+      (c) => !c.parentConversationId,
+      )
           return (
             <section
               key={project.id}
