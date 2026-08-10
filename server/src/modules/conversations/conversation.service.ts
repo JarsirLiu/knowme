@@ -6,6 +6,7 @@ import {
   PrismaConversationRepository,
   type ConversationRepository,
 } from './conversation-repository.js'
+import { ACTIVE_RUNTIME_STATUSES, isConversationAlive } from './conversation-domain.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import type { AnyTimelineEvent } from '@superagent/core'
 
@@ -21,7 +22,14 @@ export class ConversationService {
   ) {}
 
   async list(projectId: string) {
-    return this.repository.list(projectId)
+    return this.repository.list({ projectId })
+  }
+
+  async listRunning(projectId: string) {
+    return this.repository.list({
+      projectId,
+      runtimeStatuses: ACTIVE_RUNTIME_STATUSES,
+    })
   }
 
   async get(id: string) {
@@ -55,7 +63,7 @@ export class ConversationService {
     clientMessageId: string
   }) {
     const conversation = await this.get(data.conversationId)
-    if (conversation.status !== 'active') {
+    if (!isConversationAlive(conversation.status)) {
       throw new Error(`Conversation is not active: ${data.conversationId}`)
     }
 
@@ -100,7 +108,7 @@ export class ConversationService {
   }
 
   private assertCanCompact(conversation: { status: string }, id: string): void {
-    if (conversation.status !== 'active') {
+    if (!isConversationAlive(conversation.status)) {
       throw new Error(`Conversation is not active: ${id}`)
     }
   }
