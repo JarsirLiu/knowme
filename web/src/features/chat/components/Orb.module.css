@@ -81,6 +81,10 @@
   animation: orb-wave 1.7s var(--orb-ease-in-out) infinite both;
 }
 
+.latticeS4 .cell {
+  animation: orb-sweep 2.4s var(--orb-ease-in-out) infinite both;
+}
+
 @keyframes orb-wave {
   0% {
     opacity: var(--orb-rest);
@@ -99,6 +103,23 @@
   100% {
     opacity: var(--orb-rest);
     transform: scale(1);
+  }
+}
+
+@keyframes orb-sweep {
+  0% {
+    opacity: var(--orb-dim);
+    transform: scale(0.95);
+    animation-timing-function: cubic-bezier(0.66, 0, 0.34, 1);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.22);
+    animation-timing-function: cubic-bezier(0.66, 0, 0.34, 1);
+  }
+  70%, 100% {
+    opacity: var(--orb-dim);
+    transform: scale(0.95);
   }
 }
 

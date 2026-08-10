@@ -5,7 +5,6 @@ import type { ChatEntry } from '../types'
 import type { ChatClient } from '../client'
 
 type DispatchConversation = (key: string, action: ChatAction) => void
-type ClearConversationState = (key: string) => void
 
 function conversationKey(conversationId: string) {
   return `conversation:${conversationId}`
@@ -21,7 +20,6 @@ function timelineToEntries(timeline: { conversation: { runtimeStatus?: Conversat
 export function useConversationEventSubscriptions(
   client: ChatClient,
   dispatchFor: DispatchConversation,
-  clearStateFor: ClearConversationState,
 ) {
   const subscriptionsRef = useRef(new Map<string, AbortController>())
 
@@ -65,8 +63,7 @@ export function useConversationEventSubscriptions(
     const controller = subscriptionsRef.current.get(key)
     controller?.abort()
     subscriptionsRef.current.delete(key)
-    clearStateFor(key)
-  }, [clearStateFor])
+  }, [])
 
   useEffect(() => () => {
     for (const controller of subscriptionsRef.current.values()) controller.abort()

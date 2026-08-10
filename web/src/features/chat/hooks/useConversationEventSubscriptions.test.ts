@@ -46,7 +46,7 @@ describe('useConversationEventSubscriptions', () => {
     const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {
@@ -80,7 +80,7 @@ describe('useConversationEventSubscriptions', () => {
     const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {
@@ -95,7 +95,7 @@ describe('useConversationEventSubscriptions', () => {
     })
   })
 
-  it('disposeConversation aborts subscription and clears state', async () => {
+  it('disposeConversation aborts subscription without clearing cached entries', async () => {
     const client = createMockClient()
     client.getTimeline.mockResolvedValue({
       conversation: { runtimeStatus: 'idle' },
@@ -106,10 +106,9 @@ describe('useConversationEventSubscriptions', () => {
     }())
 
     const dispatchFor = vi.fn()
-    const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {
@@ -124,7 +123,7 @@ describe('useConversationEventSubscriptions', () => {
       result.current.disposeConversation('conv-1')
     })
 
-    expect(clearStateFor).toHaveBeenCalledWith('conversation:conv-1')
+    expect(client.subscribeConversationEvents).toHaveBeenCalled()
   })
 
   it('duplicate subscribeConversation calls are ignored', async () => {
@@ -139,7 +138,7 @@ describe('useConversationEventSubscriptions', () => {
     const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {
@@ -159,7 +158,7 @@ describe('useConversationEventSubscriptions', () => {
     const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {
@@ -194,7 +193,7 @@ describe('useConversationEventSubscriptions', () => {
     const clearStateFor = vi.fn()
 
     const { result } = renderHook(() =>
-      useConversationEventSubscriptions(client, dispatchFor, clearStateFor),
+      useConversationEventSubscriptions(client, dispatchFor),
     )
 
     await act(async () => {

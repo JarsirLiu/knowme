@@ -18,7 +18,11 @@ const RING: [number, number][] = (() => {
 
 const RING_INDEX = new Map(RING.map(([x, y], i) => [x + "," + y, i]));
 
-function cellDelay(v: "S1", x: number, y: number): number {
+function cellDelay(v: OrbVariant, x: number, y: number): number {
+  if (v === "S4") {
+    // soft column sweep: columns pulse left-to-right
+    return x * 320;
+  }
   const dx = x - MID;
   const dy = y - MID;
   return Math.hypot(dx, dy) * 700 - (dx === 0 && dy === 0 ? 180 : 0);
@@ -33,7 +37,7 @@ interface Cell {
   mid: boolean;
 }
 
-function latticeCells(): Cell[] {
+function latticeCells(variant: OrbVariant): Cell[] {
   const cells: Cell[] = [];
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
@@ -41,7 +45,7 @@ function latticeCells(): Cell[] {
         key: x + "," + y,
         left: x * PITCH,
         top: y * PITCH,
-        delay: cellDelay("S1", x, y),
+        delay: cellDelay(variant, x, y),
         still: false,
         mid: x === MID && y === MID,
       });
@@ -50,10 +54,13 @@ function latticeCells(): Cell[] {
   return cells;
 }
 
+export type OrbVariant = "S1" | "S4";
+
 export interface OrbProps {
   size?: number;
   label?: string;
   pill?: boolean;
+  variant?: OrbVariant;
   className?: string;
   style?: CSSProperties;
 }
@@ -62,6 +69,7 @@ export function Orb({
   size = SIZE,
   label,
   pill,
+  variant = "S1",
   className,
   style,
 }: OrbProps) {
@@ -81,8 +89,8 @@ export function Orb({
           { width: size, height: size, "--orb-k": size / STAGE } as CSSProperties
         }
       >
-        <span className={styles.lattice}>
-          {latticeCells().map((c) => (
+        <span className={`${styles.lattice} ${variant === "S4" ? styles.latticeS4 : ""}`}>
+          {latticeCells(variant).map((c) => (
             <span
               key={c.key}
               className={styles.cell}

@@ -60,7 +60,7 @@ export function useAgentChat(
     setStates((current) => ({ ...current, [key]: next }))
   }, [])
 
-  const { subscribeConversation, disposeConversation } = useConversationEventSubscriptions(client, dispatchFor, clearStateFor)
+  const { subscribeConversation, disposeConversation } = useConversationEventSubscriptions(client, dispatchFor)
 
   useEffect(() => {
     const subscribed = new Set<string>()

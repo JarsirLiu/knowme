@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Header, InputBar, MessageList, useAgentChat } from '@/features/chat'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useUIStore } from '@/stores/ui'
@@ -149,13 +149,8 @@ export default function ChatPage() {
     ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)?.title ?? '任务'
     : '新任务'
 
-  const activeConversation = active?.kind === 'persisted'
-    ? conversationsByProject[active.projectId]?.find((conversation) => conversation.id === active.conversationId)
-    : undefined
-
-  const parentConversationId = activeConversation && (activeConversation as { parentConversationId?: string | null }).parentConversationId
-    ? (activeConversation as { parentConversationId?: string | null }).parentConversationId
-    : undefined
+  const location = useLocation()
+  const parentConversationId = (location.state as { parentId?: string } | null)?.parentId
   const isChildSession = !!parentConversationId
   const parentTitle = isChildSession
     ? findParentConversation(conversationsByProject, parentConversationId!)

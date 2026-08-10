@@ -10,6 +10,11 @@ function createDraft(projectId: string): ActiveConversation {
   return { kind: 'draft', draftId: crypto.randomUUID(), projectId }
 }
 
+const isRootConversation = (c: Conversation): boolean => !c.parentConversationId
+
+const firstRootConversation = (conversations: Conversation[] | undefined): Conversation | undefined =>
+  conversations?.find(isRootConversation)
+
 interface WorkspaceState {
   initialized: boolean
   projects: Project[]
@@ -48,7 +53,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       const nextConversations = Object.fromEntries(pairs)
       const firstProject = nextProjects[0]
       const firstConversation = firstProject
-        ? nextConversations[firstProject.id]?.find((c) => !c.parentConversationId)
+        ? firstRootConversation(nextConversations[firstProject.id])
         : undefined
 
       set({
@@ -99,9 +104,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       },
       ...(deletingActive
         ? {
-            active: nextConversations.find((c) => !c.parentConversationId)
-              ? { kind: 'persisted', conversationId: nextConversations.find((c) => !c.parentConversationId)!.id, projectId }
-              : createDraft(projectId),
+            active: (() => {
+              const fallback = firstRootConversation(nextConversations)
+              return fallback
+                ? { kind: 'persisted', conversationId: fallback.id, projectId }
+                : createDraft(projectId)
+            })(),
           }
         : {}),
     }))
@@ -109,7 +117,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   selectProject: (projectId) => {
     const state = get()
-    const firstConversation = state.conversationsByProject[projectId]?.find((c) => !c.parentConversationId)
+    const firstConversation = firstRootConversation(state.conversationsByProject[projectId])
     set({
       activeProjectId: projectId,
       active: firstConversation
