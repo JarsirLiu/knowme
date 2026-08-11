@@ -1,7 +1,7 @@
 // Domain types — pure data, no behavior
 // Aligns with @openai/agents SDK lifecycle: in_progress | completed | incomplete
 
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 
 export type ToolCallStatus =
   | 'running'

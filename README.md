@@ -1,4 +1,4 @@
-# SuperAgent
+# CloudAgent
 
 本地 Coding Agent 工作台。使用 `@openai/agents` 编排 Agent，模型通过 OpenAI-compatible Chat Completions 接入，数据保存在 SQLite。
 
@@ -19,9 +19,9 @@ cp .env.example .env
 编辑 `.env`，至少填写：
 
 ```dotenv
-SUPERAGENT_BASE_URL=https://api.deepseek.com/v1
-SUPERAGENT_API_KEY=your-api-key
-SUPERAGENT_MODEL=deepseek-chat
+CLOUDAGENT_BASE_URL=https://api.deepseek.com/v1
+CLOUDAGENT_API_KEY=your-api-key
+CLOUDAGENT_MODEL=deepseek-chat
 ```
 
 模型服务需要支持 Chat Completions，最好支持 tool calling。
@@ -56,17 +56,20 @@ pnpm run build
 
 当前工具调用默认直接执行，不需要界面审批。Shell 仍受工作区边界、超时、取消和输出长度限制。
 
-模型请求默认超时为 120 秒，可通过 `SUPERAGENT_MODEL_TIMEOUT_MS` 调整；超时后当前 Run 会明确失败，不会永久保持运行中。
+模型请求默认超时为 120 秒，可通过 `CLOUDAGENT_MODEL_TIMEOUT_MS` 调整；超时后当前 Run 会明确失败，不会永久保持运行中。
 
-上下文自动压缩默认开启，按模型上下文 token 预算触发。默认上下文窗口为 64000 token，预留 16000 token 输出空间和 1024 token 安全余量，达到 90% 后压缩，并保留最近约 20000 token。兼容模型没有统一 tokenizer，因此这里使用保守估算；请按实际模型调整：
+上下文自动压缩默认开启，按模型上下文 token 预算触发。默认上下文窗口为 256000 token，预留 16000 token 输出空间和 1024 token 安全余量，达到 90% 后压缩，并保留最近约 20000 token。固定开销（系统提示词 + 工具定义）自动计入预算，设有 95% 硬上限作安全网。兼容模型没有统一 tokenizer，因此这里使用保守估算；请按实际模型调整：
 
 ```dotenv
-SUPERAGENT_CONTEXT_AUTO_COMPACT=true
-SUPERAGENT_CONTEXT_WINDOW_TOKENS=64000
-SUPERAGENT_CONTEXT_OUTPUT_RESERVE_TOKENS=16000
-SUPERAGENT_CONTEXT_SAFETY_MARGIN_TOKENS=1024
-SUPERAGENT_CONTEXT_COMPACT_TRIGGER_RATIO=0.9
-SUPERAGENT_CONTEXT_COMPACT_KEEP_TOKENS=20000
+CLOUDAGENT_CONTEXT_AUTO_COMPACT=true
+CLOUDAGENT_CONTEXT_WINDOW_TOKENS=256000
+CLOUDAGENT_CONTEXT_OUTPUT_RESERVE_TOKENS=16000
+CLOUDAGENT_CONTEXT_SAFETY_MARGIN_TOKENS=1024
+CLOUDAGENT_CONTEXT_COMPACT_TRIGGER_RATIO=0.9
+CLOUDAGENT_CONTEXT_COMPACT_KEEP_TOKENS=20000
+CLOUDAGENT_CONTEXT_FORCE_COMPACT_RATIO=0.95
+CLOUDAGENT_CONTEXT_BASE_TOKENS=            # 默认自动计算（system prompt + 工具定义）
+CLOUDAGENT_CONTEXT_TOOL_TOKENS=2000        # 工具定义近似 token，用于 baseTokens 计算
 ```
 
 详细架构方案见 [docs](docs/)。

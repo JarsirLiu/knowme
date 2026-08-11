@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Conversation, Project } from '@superagent/core'
+import type { Conversation, Project } from '@cloudagent/core'
 import { client } from '@/api/client'
 
 export type ActiveConversation =

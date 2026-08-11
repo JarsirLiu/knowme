@@ -1,5 +1,5 @@
-import { createCodingAgent, type CodingAgent, type AgentType } from '@superagent/agent'
-import type { DelegateHandler } from '@superagent/agent'
+import { createCodingAgent, type CodingAgent, type AgentType } from '@cloudagent/agent'
+import type { DelegateHandler } from '@cloudagent/agent'
 
 export type CodingAgentInstance = CodingAgent['agent']
 

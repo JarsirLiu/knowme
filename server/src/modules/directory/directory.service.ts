@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { DirectoryListing } from '@superagent/core'
+import type { DirectoryListing } from '@cloudagent/core'
 import type { PlatformStrategy } from './platforms/types.js'
 import { DirectoryAccessError, toDirectoryAccessError } from './directory.errors.js'
 

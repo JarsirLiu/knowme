@@ -1,4 +1,4 @@
-import type { SkillInfo } from '@superagent/core'
+import type { SkillInfo } from '@cloudagent/core'
 
 export type CmdItem = {
   type: 'system' | 'skill'

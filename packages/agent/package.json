@@ -1,5 +1,5 @@
 {
-  "name": "@superagent/agent",
+  "name": "@cloudagent/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -23,7 +23,7 @@
     "@mozilla/readability": "^0.6.0",
     "@openai/agents": "^0.14.0",
     "@openai/agents-extensions": "^0.14.2",
-    "@superagent/core": "workspace:*",
+    "@cloudagent/core": "workspace:*",
     "ai": "^6.0.241",
     "dotenv": "^16.4.7",
     "html-encoding-sniffer": "^6.0.0",

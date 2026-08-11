@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { CloudagentPaths } from '@superagent/core/paths'
-import { SKILL_FILENAME } from '@superagent/agent'
+import { CloudagentPaths } from '@cloudagent/core/paths'
+import { SKILL_FILENAME } from '@cloudagent/agent'
 
 const SKILL_CREATOR_MD =
 `---

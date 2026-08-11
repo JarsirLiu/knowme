@@ -1,5 +1,5 @@
 import type { RunStreamEvent } from '@openai/agents'
-import type { TimelineEventPayloadMap, TimelineEventType } from '@superagent/core'
+import type { TimelineEventPayloadMap, TimelineEventType } from '@cloudagent/core'
 import type { TimelineEventStore } from '../events/timeline-event-store.js'
 
 export type TimelineDelta =

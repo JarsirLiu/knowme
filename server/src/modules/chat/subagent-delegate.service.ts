@@ -1,4 +1,4 @@
-import type { DelegateInput } from '@superagent/agent'
+import type { DelegateInput } from '@cloudagent/agent'
 import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'

@@ -3,7 +3,7 @@ import type {
   AnyTimelineEvent,
   TimelineEventPayloadMap,
   TimelineEventType,
-} from '@superagent/core'
+} from '@cloudagent/core'
 import { prisma } from '../../db/client.js'
 
 type TimelineTransaction = Prisma.TransactionClient

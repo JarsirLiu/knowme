@@ -49,7 +49,7 @@ export async function createCodingAgent(
   setTracingDisabled(true)
 
   const provider = createOpenAICompatible({
-    name: 'superagent-compatible',
+    name: 'cloudagent-compatible',
     baseURL: cfg.baseURL,
     apiKey: cfg.apiKey,
     fetch: createTimedFetch(cfg.modelTimeoutMs),
@@ -66,7 +66,7 @@ export async function createCodingAgent(
     : undefined
 
   const agent = new Agent({
-    name: agentType === 'explore' ? 'SuperAgent/Explore' : 'SuperAgent',
+    name: agentType === 'explore' ? 'CloudAgent/Explore' : 'CloudAgent',
     model,
     instructions,
     tools: [

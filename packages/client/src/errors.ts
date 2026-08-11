@@ -1,9 +1,9 @@
-export class SuperagentClientError extends Error {
+export class CloudagentClientError extends Error {
   constructor(
     message: string,
     public statusCode?: number,
   ) {
     super(message)
-    this.name = 'SuperagentClientError'
+    this.name = 'CloudagentClientError'
   }
 }

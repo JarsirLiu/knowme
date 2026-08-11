@@ -1,6 +1,6 @@
 # 安全边界规则
 
-SuperAgent 可以读写本地项目并执行 Shell，因此安全边界属于架构合同。
+CloudAgent 可以读写本地项目并执行 Shell，因此安全边界属于架构合同。
 
 - 文件工具只能在当前 Project/workspace 根目录内工作；路径必须规范化并拒绝
   越界路径。
@@ -14,7 +14,7 @@ SuperAgent 可以读写本地项目并执行 Shell，因此安全边界属于架
 - Skill 文件只能写入项目级 `<project>/.cloudagent/skills/` 或用户级
   `CLOUDAGENT_HOME/skills/`（默认 `~/.cloudagent/skills/`）目录，由 frontmatter 校验
   `name` 和 `description` 必填字段，`name` 不超过 64 字符，`description` 不超过 1024 字符，
-  避免目录穿越或恶意覆盖。路径统一由 `@superagent/core` 的 `CloudagentPaths` 计算，禁止
+  避免目录穿越或恶意覆盖。路径统一由 `@cloudagent/core` 的 `CloudagentPaths` 计算，禁止
   在 server 或 agent 中散落硬编码路径。
 - `install_skill` 工具只接受 HTTP(S) URL，下载后验证 JSON 结构再写入磁盘，防止
   任意文件写入。Skill 注入仅在用户消息中显式提及 `$skill-name` 时触发，不自动注入所有 skill。

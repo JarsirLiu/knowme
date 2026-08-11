@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 
 export type ConversationDisplayStatus = ConversationRuntimeStatus | 'error'
 

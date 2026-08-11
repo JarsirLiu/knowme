@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronLeft, Folder, HardDrive, Home, LoaderCircle, X } from 'lucide-react'
-import type { DirectoryListing } from '@superagent/core'
+import type { DirectoryListing } from '@cloudagent/core'
 import { client } from '@/api/client'
 import styles from './DirectoryPickerModal.module.css'
 

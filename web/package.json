@@ -1,5 +1,5 @@
 {
-  "name": "superagent-web",
+  "name": "cloudagent-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@superagent/client": "workspace:*",
-    "@superagent/core": "workspace:*",
+    "@cloudagent/client": "workspace:*",
+    "@cloudagent/core": "workspace:*",
     "ai": "^4.0.0",
     "lucide-react": "^1.28.0",
     "react": "^19.2.3",

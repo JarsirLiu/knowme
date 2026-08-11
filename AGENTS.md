@@ -1,4 +1,4 @@
-# SuperAgent Repository Guidelines
+# CloudAgent Repository Guidelines
 
 ## AI Reading Protocol
 
@@ -21,7 +21,7 @@ until the task deliberately changes the behavior.
 
 ## Repository Shape
 
-SuperAgent is a pnpm workspace for a local coding agent:
+CloudAgent is a pnpm workspace for a local coding agent:
 
 - `packages/core` - shared domain types, requests, responses, and timeline
   event contracts. It must stay independent of Fastify, Prisma, React, and
@@ -32,7 +32,7 @@ SuperAgent is a pnpm workspace for a local coding agent:
 - `server` - Fastify API, durable conversation/run/session state, approvals,
   scheduling, recovery, and event persistence.
 - `web` - React user interface. It talks to the server through
-  `@superagent/client` and shared `@superagent/core` contracts.
+  `@cloudagent/client` and shared `@cloudagent/core` contracts.
 - `docs` - current architecture facts, mandatory rules, and future design
   notes.
 

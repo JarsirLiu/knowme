@@ -11,8 +11,8 @@ import type {
   ToolCallStatus,
   Turn,
 } from '../types'
-import type { AnyTimelineEvent } from '@superagent/core'
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 
 export type ChatAction =
   | { type: 'LOAD_ENTRIES'; entries: ChatEntry[]; runtimeStatus?: ConversationRuntimeStatus }

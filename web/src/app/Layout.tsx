@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useUIStore } from '@/stores/ui'
 import styles from './Layout.module.css'
 
-const STORAGE_KEY = 'superagent_sidebar_width'
+const STORAGE_KEY = 'cloudagent_sidebar_width'
 const MOBILE_BREAK = 760
 const DEFAULT_WIDTH = 260
 const MIN_WIDTH = 220

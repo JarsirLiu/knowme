@@ -1,7 +1,7 @@
 import type { FastifyReply } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { setupSSEHeaders, sendSSE } from '../../utils/sse.js'
-import type { AnyTimelineEvent } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import { TimelineEventHub } from '../events/timeline-event-hub.js'

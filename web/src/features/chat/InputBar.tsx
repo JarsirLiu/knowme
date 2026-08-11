@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { SkillInfo } from '@superagent/core'
+import type { SkillInfo } from '@cloudagent/core'
 import { buildCommandList, type CmdItem } from './commands'
 import { CommandMenu } from './components/CommandMenu'
 import styles from './InputBar.module.css'

@@ -1,5 +1,5 @@
-import { loadSkills, listReferenceFiles, listScriptFiles } from '@superagent/agent'
-import type { SkillInfo } from '@superagent/core'
+import { loadSkills, listReferenceFiles, listScriptFiles } from '@cloudagent/agent'
+import type { SkillInfo } from '@cloudagent/core'
 import type { ProjectService } from './project.service.js'
 
 export class SkillService {

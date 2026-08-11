@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 import { applyTimelineEvent, type ChatAction } from '../state/reducer'
 import type { ChatEntry } from '../types'
 import type { ChatClient } from '../client'
@@ -10,7 +10,7 @@ function conversationKey(conversationId: string) {
   return `conversation:${conversationId}`
 }
 
-function timelineToEntries(timeline: { conversation: { runtimeStatus?: ConversationRuntimeStatus }; events: import('@superagent/core').AnyTimelineEvent[] }): ChatEntry[] {
+function timelineToEntries(timeline: { conversation: { runtimeStatus?: ConversationRuntimeStatus }; events: import('@cloudagent/core').AnyTimelineEvent[] }): ChatEntry[] {
   return timeline.events.reduce(
     (entries, event) => applyTimelineEvent(entries, event),
     [] as ChatEntry[],

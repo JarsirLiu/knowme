@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 import type { ActiveConversation } from '@/stores/workspace'
 import { chatReducer } from '../state/reducer'
 import type { ChatState } from '../types'

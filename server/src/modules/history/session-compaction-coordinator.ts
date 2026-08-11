@@ -75,6 +75,8 @@ function skippedCompaction(trigger: SessionCompactionTrigger): SessionCompaction
     estimatedTokensAfter: 0,
     predictedInputTokens: 0,
     inputBudgetTokens: 0,
+    hardLimitTokens: 0,
+    baseTokens: 0,
     recentTokenBudget: 0,
   }
 }

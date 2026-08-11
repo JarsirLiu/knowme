@@ -1,4 +1,4 @@
-import type { AnyTimelineEvent } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
 import { prisma } from '../../db/client.js'
 import { appendTimelineEvent } from '../events/timeline-event-store.js'
 

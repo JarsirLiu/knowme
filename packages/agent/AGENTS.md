@@ -5,7 +5,7 @@ Read the root [AGENTS.md](../../AGENTS.md) and
 
 ## Responsibilities
 
-`@superagent/agent` adapts the Agent SDK, model providers, instructions, and
+`@cloudagent/agent` adapts the Agent SDK, model providers, instructions, and
 local tools. It provides Agent construction but does not own:
 
 - Conversation, AgentRun, Approval, or SQLite persistence.

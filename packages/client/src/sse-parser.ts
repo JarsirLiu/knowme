@@ -1,4 +1,4 @@
-import type { SSEEvent } from '@superagent/core'
+import type { SSEEvent } from '@cloudagent/core'
 
 export async function* parseSSEStream(
   response: Response,

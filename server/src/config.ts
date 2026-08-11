@@ -8,6 +8,6 @@ export interface ServerConfig {
 }
 
 export function loadServerConfig(): ServerConfig {
-  const port = Number(process.env.SUPERAGENT_PORT || '3801') || 3801
+  const port = Number(process.env.CLOUDAGENT_PORT || '3801') || 3801
   return { port }
 }

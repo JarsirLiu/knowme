@@ -21,7 +21,7 @@ const REQUEST_HEADERS = {
   accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,application/json;q=0.8,*/*;q=0.6',
   'accept-language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
   'user-agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 SuperAgent/0.1',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 CloudAgent/0.1',
 }
 
 type RawNumber = number | string | null | undefined

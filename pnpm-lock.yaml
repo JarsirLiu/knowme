@@ -13,6 +13,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.22
         version: 3.0.22(zod@4.4.3)
+      '@cloudagent/core':
+        specifier: workspace:*
+        version: link:../core
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -22,9 +25,6 @@ importers:
       '@openai/agents-extensions':
         specifier: ^0.14.2
         version: 0.14.2(@ai-sdk/provider@4.0.5)(@openai/agents@0.14.0(ws@8.21.1)(zod@4.4.3))(ai@6.0.241(zod@4.4.3))(ws@8.21.1)(zod@4.4.3)
-      '@superagent/core':
-        specifier: workspace:*
-        version: link:../core
       ai:
         specifier: ^6.0.241
         version: 6.0.241(zod@4.4.3)
@@ -53,7 +53,7 @@ importers:
 
   packages/client:
     dependencies:
-      '@superagent/core':
+      '@cloudagent/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -72,6 +72,12 @@ importers:
 
   server:
     dependencies:
+      '@cloudagent/agent':
+        specifier: workspace:*
+        version: link:../packages/agent
+      '@cloudagent/core':
+        specifier: workspace:*
+        version: link:../packages/core
       '@fastify/cors':
         specifier: ^11.0.1
         version: 11.3.0
@@ -81,12 +87,6 @@ importers:
       '@prisma/client':
         specifier: 6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@5.0.2))(typescript@5.0.2)
-      '@superagent/agent':
-        specifier: workspace:*
-        version: link:../packages/agent
-      '@superagent/core':
-        specifier: workspace:*
-        version: link:../packages/core
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
@@ -106,10 +106,10 @@ importers:
 
   web:
     dependencies:
-      '@superagent/client':
+      '@cloudagent/client':
         specifier: workspace:*
         version: link:../packages/client
-      '@superagent/core':
+      '@cloudagent/core':
         specifier: workspace:*
         version: link:../packages/core
       ai:

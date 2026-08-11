@@ -365,7 +365,7 @@ Artifact
 SQLite 使用 WAL 模式。数据库只保存结构化状态和资源元数据，大文件保存到应用数据目录，例如：
 
 ```text
-.superagent/
+.cloudagent/
   .data/data.db
   artifacts/
   logs/
@@ -498,7 +498,7 @@ web_fetch({
 Skill 先采用本地目录方式：
 
 ```text
-.superagent/skills/<skill-id>/
+.cloudagent/skills/<skill-id>/
   SKILL.md
   manifest.json
   references/

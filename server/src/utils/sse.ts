@@ -1,5 +1,5 @@
 import type { FastifyReply } from 'fastify'
-import type { SSEEvent } from '@superagent/core'
+import type { SSEEvent } from '@cloudagent/core'
 
 export function sendSSE(reply: FastifyReply, event: SSEEvent): void {
   reply.raw.write(`id: ${event.id}\ndata: ${JSON.stringify(event)}\n\n`)

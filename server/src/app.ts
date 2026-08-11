@@ -6,10 +6,10 @@ import { ensureDatabase } from './db/ensure-database.js'
 
 export function createApp(config: ServerConfig) {
   const app = Fastify({
-    logger: process.env.SUPERAGENT_FASTIFY_LOGGER === 'false'
+    logger: process.env.CLOUDAGENT_FASTIFY_LOGGER === 'false'
       ? false
       : {
-          level: process.env.SUPERAGENT_LOG_LEVEL ?? 'info',
+          level: process.env.CLOUDAGENT_LOG_LEVEL ?? 'info',
           base: null,
         },
   })

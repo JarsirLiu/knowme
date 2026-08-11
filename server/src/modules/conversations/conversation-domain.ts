@@ -1,5 +1,5 @@
 import type { Conversation } from '@prisma/client'
-import type { ConversationRuntimeStatus } from '@superagent/core'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 
 export function runtimeStatusForRuns(runs: Array<{ status: string }>): ConversationRuntimeStatus {
   if (runs.some((run) => run.status === 'running')) return 'running'

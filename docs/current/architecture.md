@@ -4,19 +4,19 @@
 
 ## 系统边界
 
-SuperAgent 是一个本地 coding agent 工作台。Web UI 通过 typed client 调用
+CloudAgent 是一个本地 coding agent 工作台。Web UI 通过 typed client 调用
 Fastify API；服务端负责产品状态、运行调度、持久化和恢复；Agent package 负责
 模型与工具构造；Core package 提供跨包协议。
 
 ```text
 React Web
-  -> @superagent/client (HTTP + SSE)
-  -> @superagent/core (types + event contracts)
+  -> @cloudagent/client (HTTP + SSE)
+  -> @cloudagent/core (types + event contracts)
   -> Fastify server
        -> application services and coordinators
        -> Prisma repositories / event stores
        -> SQLite
-       -> @superagent/agent
+       -> @cloudagent/agent
             -> Agents SDK + compatible model + local tools
 ```
 
@@ -55,9 +55,9 @@ Skill 是扩展 agent 能力的本地机制，采用 `SKILL.md` 格式（YAML fr
   对应层级。
 - 生效时机：skill 在每次 turn 由 `AgentRunExecutor` 加载（`loadSkills`）。新安装或创建的 skill
   需要等到下一次 turn 才生效。
-- 依赖方向：skill 系统只依赖 `@superagent/core` 的 `CloudagentPaths` 以及本包内部的
+- 依赖方向：skill 系统只依赖 `@cloudagent/core` 的 `CloudagentPaths` 以及本包内部的
   `skill/parser`、`mention` 和 `node:fs`，不依赖 server 或 client。`AgentRunExecutor`
-  通过 `@superagent/agent` 导出的 `resolveMentions`/`loadSkills` 接入提及解析。
+  通过 `@cloudagent/agent` 导出的 `resolveMentions`/`loadSkills` 接入提及解析。
 
 ### `packages/client`
 

@@ -7,7 +7,7 @@ import {
   PrismaAgentSessionLifecycleRepository,
   type AgentSessionLifecycleRepository,
 } from '../history/session-lifecycle-repository.js'
-import type { AnyTimelineEvent } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
 
 export type TurnCreation = {
   projectId: string

@@ -11,6 +11,10 @@ export interface CompactionPolicyOptions {
   triggerRatio: number
   keepRecentTokens: number
   maxPromptChars: number
+  /** Fixed input overhead (system prompt + tool definitions) not stored in session items. */
+  baseTokens?: number
+  /** Fraction of the context window that forces compaction as a safety net. */
+  forceCompactRatio?: number
 }
 
 export interface SessionCompactionResult {
@@ -27,6 +31,8 @@ export interface SessionCompactionResult {
   predictedInputTokens: number
   confirmedInputTokens?: number
   inputBudgetTokens: number
+  hardLimitTokens: number
+  baseTokens: number
   recentTokenBudget: number
 }
 
@@ -39,6 +45,38 @@ export function createCompactionBudget(options: CompactionPolicyOptions) {
     inputBudgetTokens,
     compactBefore: Math.max(1, Math.floor(inputBudgetTokens * options.triggerRatio)),
   }
+}
+
+export function createHardLimit(options: CompactionPolicyOptions): number {
+  return Math.max(1, Math.floor(options.contextWindowTokens * (options.forceCompactRatio ?? 0.95)))
+}
+
+export function computePredictedInputTokens(input: {
+  estimatedTokensBefore: number
+  baseTokens: number
+  baseline?: { inputTokens: number; estimatedTokens: number }
+}): number {
+  const effectiveTokensBefore = input.estimatedTokensBefore + input.baseTokens
+  return input.baseline
+    ? Math.max(0, input.baseline.inputTokens + input.estimatedTokensBefore - input.baseline.estimatedTokens)
+    : effectiveTokensBefore
+}
+
+export function shouldCompact(input: {
+  predictedInputTokens: number
+  compactBefore: number
+  hardLimitTokens: number
+  force: boolean
+  enabled: boolean
+}): { shouldCompact: boolean; reason?: string } {
+  if (input.force) return { shouldCompact: true }
+  if (!input.enabled && input.predictedInputTokens < input.hardLimitTokens) {
+    return { shouldCompact: false, reason: 'auto compaction disabled' }
+  }
+  if (input.predictedInputTokens < input.compactBefore && input.predictedInputTokens < input.hardLimitTokens) {
+    return { shouldCompact: false, reason: 'context token budget not reached' }
+  }
+  return { shouldCompact: true }
 }
 
 export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number) {
@@ -80,7 +118,7 @@ export function createSummaryItem(
       'Use this summary as authoritative prior context:\n\n' +
       summary,
     providerData: {
-      superagent: {
+      cloudagent: {
         kind: 'context_compaction',
         id: randomUUID(),
         trigger: metadata.trigger,
@@ -118,6 +156,8 @@ export function skipped(
   estimatedTokensBefore: number,
   predictedInputTokens: number,
   budget: { inputBudgetTokens: number; compactBefore: number },
+  hardLimitTokens: number,
+  baseTokens: number,
   baseline?: { inputTokens: number; estimatedTokens: number },
 ): SessionCompactionResult {
   return {
@@ -133,6 +173,8 @@ export function skipped(
     predictedInputTokens,
     ...(baseline ? { confirmedInputTokens: baseline.inputTokens } : {}),
     inputBudgetTokens: budget.inputBudgetTokens,
+    hardLimitTokens,
+    baseTokens,
     recentTokenBudget: 0,
   }
 }

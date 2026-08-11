@@ -1,6 +1,9 @@
 import type { AgentInputItem } from '@openai/agents'
 import {
   createCompactionBudget,
+  createHardLimit,
+  computePredictedInputTokens,
+  shouldCompact,
   createSummaryItem,
   estimateTokens,
   isReasoningItem,
@@ -55,27 +58,36 @@ export class SessionCompactionService {
     const items = await this.repository.readItems(sessionId)
     const force = trigger === 'manual'
     const budget = createCompactionBudget(options)
+    const hardLimitTokens = createHardLimit(options)
+    const baseTokens = options.baseTokens ?? 0
     const estimatedTokensBefore = estimateTokens(items)
     const baseline = await this.repository.readUsageBaseline(sessionId)
-    const predictedInputTokens = baseline
-      ? Math.max(0, baseline.inputTokens + estimatedTokensBefore - baseline.estimatedTokens)
-      : estimatedTokensBefore
+    const predictedInputTokens = computePredictedInputTokens({
+      estimatedTokensBefore,
+      baseTokens,
+      baseline,
+    })
 
-    if (!force && !options.enabled) {
-      return skipped(trigger, 'auto compaction disabled', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
-    }
-    if (!force && predictedInputTokens < budget.compactBefore) {
-      return skipped(trigger, 'context token budget not reached', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+    // Decision — pure function in budget layer
+    const decision = shouldCompact({
+      predictedInputTokens,
+      compactBefore: budget.compactBefore,
+      hardLimitTokens,
+      force,
+      enabled: options.enabled,
+    })
+    if (!decision.shouldCompact) {
+      return skipped(trigger, decision.reason!, items.length, estimatedTokensBefore, predictedInputTokens, budget, hardLimitTokens, baseTokens, baseline)
     }
 
     const selection = selectRecentTail(items, options.keepRecentTokens)
     if (!selection) {
-      return skipped(trigger, 'no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+      return skipped(trigger, 'no complete historical turn fits the recent token budget', items.length, estimatedTokensBefore, predictedInputTokens, budget, hardLimitTokens, baseTokens, baseline)
     }
 
     const compactedItems = items.slice(0, selection.startIndex)
     if (compactedItems.length === 0) {
-      return skipped(trigger, 'no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, baseline)
+      return skipped(trigger, 'no historical turn available to compact', items.length, estimatedTokensBefore, predictedInputTokens, budget, hardLimitTokens, baseTokens, baseline)
     }
 
     await hooks?.beforeCompaction?.()
@@ -107,6 +119,8 @@ export class SessionCompactionService {
       predictedInputTokens,
       ...(baseline ? { confirmedInputTokens: baseline.inputTokens } : {}),
       inputBudgetTokens: budget.inputBudgetTokens,
+      hardLimitTokens,
+      baseTokens,
       recentTokenBudget: options.keepRecentTokens,
     }
   }

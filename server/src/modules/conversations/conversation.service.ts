@@ -7,7 +7,7 @@ import {
   type ConversationRepository,
 } from './conversation-repository.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
-import type { AnyTimelineEvent } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
 
 type PersistCompactionMessage = (sessionId: string, result: SessionCompactionResult) => Promise<unknown>
 

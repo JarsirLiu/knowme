@@ -6,9 +6,9 @@ Read the root [AGENTS.md](../AGENTS.md),
 
 ## Web Boundary
 
-- Use `@superagent/client` for API and SSE access; do not depend directly on
+- Use `@cloudagent/client` for API and SSE access; do not depend directly on
   server source, Prisma, or the database.
-- Use request, response, and Timeline types from `@superagent/core`; update
+- Use request, response, and Timeline types from `@cloudagent/core`; update
   both client and server when contracts change.
 - Keep Draft Conversations in frontend memory until the first message
   succeeds, then replace them with the server `conversationId`.

@@ -79,6 +79,8 @@ export class PrismaSessionCompactionRepository implements SessionCompactionRepos
       estimatedTokensAfter: result.estimatedTokensAfter,
       predictedInputTokens: result.predictedInputTokens,
       inputBudgetTokens: result.inputBudgetTokens,
+      hardLimitTokens: result.hardLimitTokens,
+      baseTokens: result.baseTokens,
       summary: result.summary,
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AnyTimelineEvent, ConversationRuntimeStatus } from '@superagent/core'
+import type { AnyTimelineEvent, ConversationRuntimeStatus } from '@cloudagent/core'
 import type { ChatEntry, ChatState } from '../types'
 import { applyTimelineEvent, chatReducer } from './reducer'
 

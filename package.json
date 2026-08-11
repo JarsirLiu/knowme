@@ -1,5 +1,5 @@
 {
-  "name": "superagent",
+  "name": "cloudagent",
   "version": "0.1.0",
   "private": true,
   "description": "Local coding agent powered by @openai/agents",

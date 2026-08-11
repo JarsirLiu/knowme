@@ -1,6 +1,6 @@
 import { run, RunState, user, type Agent, type RunStreamEvent } from '@openai/agents'
-import { buildEnvironmentContext, buildTimeReminder } from '@superagent/agent'
-import { resolveMentions, loadSkills, SKILL_FILENAME } from '@superagent/agent'
+import { buildEnvironmentContext, buildTimeReminder } from '@cloudagent/agent'
+import { resolveMentions, loadSkills, SKILL_FILENAME } from '@cloudagent/agent'
 import { join } from 'node:path'
 import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
@@ -50,7 +50,7 @@ export class AgentRunExecutor {
     await seedBuiltinSkills().catch(() => undefined)
 
     const delegateHandler = this.subagentDelegate
-      ? (input: import('@superagent/agent').DelegateInput) =>
+      ? (input: import('@cloudagent/agent').DelegateInput) =>
           this.subagentDelegate!.delegate(input, {
             conversationId: conversation.id,
             parentRunId: runId,
@@ -213,11 +213,11 @@ export class AgentRunExecutor {
     this.timelineStore.publish(completedEvent)
   }
 
-  private async emit<T extends import('@superagent/core').TimelineEventType>(
+  private async emit<T extends import('@cloudagent/core').TimelineEventType>(
     conversationId: string,
     runId: string,
     type: T,
-    data: import('@superagent/core').TimelineEventPayloadMap[T],
+    data: import('@cloudagent/core').TimelineEventPayloadMap[T],
     leaseOwner?: string,
   ) {
     if (leaseOwner) {

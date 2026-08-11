@@ -32,7 +32,7 @@ export class RunCoordinator {
     executor?: AgentRunExecutor,
     scheduler?: RunScheduler,
     lifecycleRepository?: PrismaRunLifecycleRepository,
-    maxConcurrentRuns = Number(process.env.SUPERAGENT_MAX_CONCURRENT_RUNS || DEFAULT_MAX_CONCURRENT_RUNS),
+    maxConcurrentRuns = Number(process.env.CLOUDAGENT_MAX_CONCURRENT_RUNS || DEFAULT_MAX_CONCURRENT_RUNS),
   ) {
     this.executor = executor ?? new AgentRunExecutor(conversationService, approvalService, timelineStore)
     this.scheduler = scheduler ?? new RunScheduler()

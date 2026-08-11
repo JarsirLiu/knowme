@@ -16,20 +16,20 @@ import type {
   StartTurnResult,
   SkillInfo,
   SkillsListResponse,
-} from '@superagent/core'
+} from '@cloudagent/core'
 import { parseSSEStream } from './sse-parser.js'
-import { SuperagentClientError } from './errors.js'
+import { CloudagentClientError } from './errors.js'
 
-export interface SuperagentClientOptions {
+export interface CloudagentClientOptions {
   baseUrl: string
 }
 
 export const MAX_EVENT_RECONNECT_ATTEMPTS = 8
 
-export class SuperagentClient {
+export class CloudagentClient {
   private baseUrl: string
 
-  constructor(opts: SuperagentClientOptions) {
+  constructor(opts: CloudagentClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '')
   }
 
@@ -145,7 +145,7 @@ export class SuperagentClient {
         }
       } catch (error) {
         if (signal?.aborted) return
-        if (error instanceof SuperagentClientError && error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode < 500) throw error
+        if (error instanceof CloudagentClientError && error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode < 500) throw error
         lastError = error
       }
       if (signal?.aborted) return
@@ -202,7 +202,7 @@ export class SuperagentClient {
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new SuperagentClientError(
+      throw new CloudagentClientError(
         `Request failed: ${res.status} ${res.statusText}${text ? ` - ${text}` : ''}`,
         res.status,
       )

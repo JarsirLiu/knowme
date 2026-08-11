@@ -1,4 +1,4 @@
-import type { ConversationTimelineResponse, SSEEvent, StartTurnRequest, StartTurnResult } from '@superagent/core'
+import type { ConversationTimelineResponse, SSEEvent, StartTurnRequest, StartTurnResult } from '@cloudagent/core'
 
 export interface ChatClient {
   getTimeline(conversationId: string): Promise<ConversationTimelineResponse>

@@ -39,7 +39,7 @@ queued -> running -> completed
 没有可恢复 state 的运行在重启或租约失效时会进入
 `interrupted`，而不是假装可以安全续跑。
 
-模型请求使用 `SUPERAGENT_MODEL_TIMEOUT_MS` 控制超时，默认 120 秒；超时会进入既有的
+模型请求使用 `CLOUDAGENT_MODEL_TIMEOUT_MS` 控制超时，默认 120 秒；超时会进入既有的
 Run 错误收尾路径，不会无限保持 `running`。
 
 ## Coordinator 与 Executor
@@ -80,11 +80,11 @@ the corresponding failure, cancellation, interruption, or approval path.
 
 ### `AgentRuntime`
 
-是服务端和 `@superagent/agent` 之间的适配端口。它隐藏 Agent 创建、Session
+是服务端和 `@cloudagent/agent` 之间的适配端口。它隐藏 Agent 创建、Session
 构造和 SDK Runner 细节，便于单测 Executor 和未来替换运行内核。
 
 不同 Conversation 的 Run 可以由 Coordinator 并行执行，默认上限为 4，可通过
-`SUPERAGENT_MAX_CONCURRENT_RUNS` 调整；同一 Conversation 仍由 `activeRunId`
+`CLOUDAGENT_MAX_CONCURRENT_RUNS` 调整；同一 Conversation 仍由 `activeRunId`
 保证最多一个 active Run。每个 Conversation 独立拥有 AgentSession、checkpoint、
 Timeline 和 SSE 订阅。
 

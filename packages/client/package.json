@@ -1,5 +1,5 @@
 {
-  "name": "@superagent/client",
+  "name": "@cloudagent/client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@superagent/core": "workspace:*"
+    "@cloudagent/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5"

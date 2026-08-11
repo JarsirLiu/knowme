@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { CloudagentPaths } from '@superagent/core/paths'
+import { CloudagentPaths } from '@cloudagent/core/paths'
 import { parseSkillFile, SKILL_FILENAME } from './parser.js'
 import type { SkillMetadata } from './types.js'
 

@@ -37,7 +37,7 @@
 
 ### 3.1 Node
 
-一台设备上的 SuperAgent 运行实例，拥有稳定的 `nodeId` 和密钥对。
+一台设备上的 CloudAgent 运行实例，拥有稳定的 `nodeId` 和密钥对。
 
 Node 负责：
 
@@ -125,9 +125,9 @@ Node Runtime
 建议启动方式：
 
 ```text
-superagent node --mode worker
-superagent node --mode hub
-superagent node --mode hub-worker
+cloudagent node --mode worker
+cloudagent node --mode hub
+cloudagent node --mode hub-worker
 ```
 
 大多数设备使用 `hub-worker`，既可以接受远程任务，也可以转发其他设备的消息。

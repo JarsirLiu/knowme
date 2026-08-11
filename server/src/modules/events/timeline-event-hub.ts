@@ -1,4 +1,4 @@
-import type { AnyTimelineEvent } from '@superagent/core'
+import type { AnyTimelineEvent } from '@cloudagent/core'
 
 type Listener = (event: AnyTimelineEvent) => void
 

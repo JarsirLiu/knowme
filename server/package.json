@@ -1,5 +1,5 @@
 {
-  "name": "superagent-server",
+  "name": "cloudagent-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,8 +18,8 @@
     "@prisma/client": "6.19.3",
     "@openai/agents": "^0.14.0",
     "dotenv": "^16.4.7",
-    "@superagent/agent": "workspace:*",
-    "@superagent/core": "workspace:*"
+    "@cloudagent/agent": "workspace:*",
+    "@cloudagent/core": "workspace:*"
   },
   "devDependencies": {
     "prisma": "6.19.3",

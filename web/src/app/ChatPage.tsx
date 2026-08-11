@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/ui'
 import { client } from '@/api/client'
 import { ProjectModal } from '@/components/ProjectModal/ProjectModal'
 import { DirectoryPickerModal } from '@/components/DirectoryPickerModal/DirectoryPickerModal'
-import type { SkillInfo } from '@superagent/core'
+import type { SkillInfo } from '@cloudagent/core'
 import styles from './ChatPage.module.css'
 
 function findParentConversation(

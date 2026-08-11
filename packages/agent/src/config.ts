@@ -22,11 +22,11 @@ function getPositiveInteger(name: string, fallback: number): number {
 }
 
 export function loadConfig(): AppConfig {
-  const baseURL = getRequired('SUPERAGENT_BASE_URL', 'OPENAI_BASE_URL')
-  const apiKey = getRequired('SUPERAGENT_API_KEY', 'OPENAI_API_KEY')
-  const model = getRequired('SUPERAGENT_MODEL', 'OPENAI_MODEL')
+  const baseURL = getRequired('CLOUDAGENT_BASE_URL', 'OPENAI_BASE_URL')
+  const apiKey = getRequired('CLOUDAGENT_API_KEY', 'OPENAI_API_KEY')
+  const model = getRequired('CLOUDAGENT_MODEL', 'OPENAI_MODEL')
   const workspace =
-    process.env.SUPERAGENT_WORKSPACE || process.env.WORKSPACE || process.cwd()
-  const modelTimeoutMs = getPositiveInteger('SUPERAGENT_MODEL_TIMEOUT_MS', 120_000)
+    process.env.CLOUDAGENT_WORKSPACE || process.env.WORKSPACE || process.cwd()
+  const modelTimeoutMs = getPositiveInteger('CLOUDAGENT_MODEL_TIMEOUT_MS', 120_000)
   return { baseURL, apiKey, model, workspace, modelTimeoutMs }
 }

@@ -8,5 +8,5 @@ export { composePrompt, registerFragment, getFragment, buildEnvironmentContext, 
 export type { PromptConfig, PromptFragment } from './prompts/index.js'
 export { loadSkills, createSkillTools, resolveMentions, extractSkillMentions, SKILL_FILENAME, listReferenceFiles, listScriptFiles } from './skills/index.js'
 export type { SkillMetadata, SkillFrontmatter, SkillScope } from './skills/index.js'
-export type { AgentType } from './instructions.js'
+export { getInstructions, type AgentType } from './instructions.js'
 export { getExploreAgentPrompt } from './agent.js'
