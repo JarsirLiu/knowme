@@ -16,7 +16,7 @@
     "fastify": "^5.3.2",
     "@fastify/cors": "^11.0.1",
     "@prisma/client": "6.19.3",
-    "@openai/agents": "^0.14.0",
+    "@openai/agents": "0.15.0",
     "dotenv": "^16.4.7",
     "@cloudagent/agent": "workspace:*",
     "@cloudagent/core": "workspace:*"
@@ -24,6 +24,6 @@
   "devDependencies": {
     "prisma": "6.19.3",
     "tsx": "^4.19.0",
-    "typescript": "^5"
+    "typescript": "^5.6.0"
   }
 }
