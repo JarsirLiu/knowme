@@ -1,4 +1,5 @@
 import type { SessionCompactionResult } from '../history/compaction-policy.js'
+import { randomUUID } from 'node:crypto'
 import { persistCompactionMessage } from '../history/session-compaction.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import { LegacyTimelineMigration } from './legacy-timeline-migration.js'
@@ -6,6 +7,7 @@ import {
   PrismaConversationRepository,
   type ConversationRepository,
 } from './conversation-repository.js'
+import { ACTIVE_RUNTIME_STATUSES, isConversationAlive } from './conversation-domain.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import type { AnyTimelineEvent } from '@cloudagent/core'
 
@@ -21,7 +23,14 @@ export class ConversationService {
   ) {}
 
   async list(projectId: string) {
-    return this.repository.list(projectId)
+    return this.repository.list({ projectId })
+  }
+
+  async listRunning(projectId: string) {
+    return this.repository.list({
+      projectId,
+      runtimeStatuses: ACTIVE_RUNTIME_STATUSES,
+    })
   }
 
   async get(id: string) {
@@ -55,7 +64,7 @@ export class ConversationService {
     clientMessageId: string
   }) {
     const conversation = await this.get(data.conversationId)
-    if (conversation.status !== 'active') {
+    if (!isConversationAlive(conversation.status)) {
       throw new Error(`Conversation is not active: ${data.conversationId}`)
     }
 
@@ -92,7 +101,15 @@ export class ConversationService {
     const events: AnyTimelineEvent[] = []
     const session = this.buildCompactionSession(id, sessionId, events)
     const result = await session.compact('manual')
-    if (result.status !== 'compacted') return { ...result, events }
+    if (result.status !== 'compacted') {
+      const skippedId = randomUUID()
+      events.push(await this.timelineStore.append(id, null, 'context_compaction.skipped', {
+        id: skippedId,
+        trigger: 'manual',
+        reason: result.reason ?? 'no historical turn available to compact',
+      }))
+      return { ...result, events }
+    }
 
     await this.compactionPersister(sessionId, result)
     await this.repository.touch(id)
@@ -100,7 +117,7 @@ export class ConversationService {
   }
 
   private assertCanCompact(conversation: { status: string }, id: string): void {
-    if (conversation.status !== 'active') {
+    if (!isConversationAlive(conversation.status)) {
       throw new Error(`Conversation is not active: ${id}`)
     }
   }

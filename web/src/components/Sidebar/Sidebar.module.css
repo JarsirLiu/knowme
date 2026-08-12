@@ -101,7 +101,6 @@
 .statusDot { width: 5px; height: 5px; flex: 0 0 5px; border-radius: 50%; background: var(--c-subtle); }
 .statusDotBusy { background: var(--c-success); box-shadow: 0 0 0 3px color-mix(in sRGB, var(--c-success) 20%, transparent); }
 .conversationTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; display: inline-flex; align-items: center; gap: 4px; }
-.childIcon { flex-shrink: 0; opacity: 0.5; }
 
 .emptyProject { padding: 5px 11px 8px 20px; color: var(--c-subtle); font-size: 13px; }
 

@@ -3,7 +3,8 @@ import {
   OpenAICompatibleContextSummarizer,
   type ContextSummarizer,
 } from './context-summarizer.js'
-import { estimateTokens, type CompactionPolicyOptions } from './compaction-policy.js'
+import { type CompactionPolicyOptions } from './compaction-policy.js'
+import { estimateTokens } from './token-estimator.js'
 
 export interface SessionCompactionOptions extends CompactionPolicyOptions {
   summarizer: ContextSummarizer

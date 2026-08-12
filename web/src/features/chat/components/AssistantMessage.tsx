@@ -1,5 +1,5 @@
 import type { AssistantMessage as AssistantMessageType } from '../types'
-import { ContextCompactionMessage, TextMessage, ReasoningMessage } from '../messages'
+import { TextMessage, ReasoningMessage } from '../messages'
 import { ToolCallList } from './ToolCallItem'
 import { SubAgentCard } from './SubAgentCard'
 import { ApprovalBar } from './ApprovalBar'
@@ -34,9 +34,6 @@ export function AssistantMessage({ message, onApprove, onDeny }: AssistantMessag
         <>
           <div className={styles.content}>
             {parts.map((part, i) => {
-              if (part.type === 'compaction') {
-                return <ContextCompactionMessage key={`compaction-${part.compaction.id}`} compaction={part.compaction} />
-              }
               if (part.type === 'tool') {
                 const toolCall = message.toolCalls.find((tool) => tool.id === part.callId)
                 if (!toolCall) return null

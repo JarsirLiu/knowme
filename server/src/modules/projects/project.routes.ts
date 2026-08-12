@@ -28,7 +28,10 @@ app.get('/api/projects', async (_req, reply) => {
 
   app.get('/api/projects/:projectId/conversations', async (req, reply) => {
     const { projectId } = req.params as { projectId: string }
-    const conversations = await conversationService.list(projectId)
+    const running = (req.query as { running?: string }).running === 'true'
+    const conversations = running
+      ? await conversationService.listRunning(projectId)
+      : await conversationService.list(projectId)
     return reply.send({ conversations })
   })
 

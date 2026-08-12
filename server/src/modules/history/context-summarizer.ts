@@ -30,7 +30,11 @@ export class OpenAICompatibleContextSummarizer implements ContextSummarizer {
           {
             role: 'system',
             content:
-              'You compact long coding-agent conversations. Preserve user goals, project facts, decisions, modified files, commands, tool results, current plan, blockers, and unresolved risks. Be concise and factual.',
+              'You compact long coding-agent conversations into a durable summary that will replace the earlier history. ' +
+              'Preserve verbatim where possible: the user goal and acceptance criteria, key decisions and their rationale, ' +
+              'files that were created or modified (with paths), commands run and their effects, important tool results and errors, ' +
+              'the current plan and remaining steps, and any unresolved risks or blockers. ' +
+              'Do not invent facts. Be concise, factual, and use short bullet lists. Keep concrete paths, commands, and error messages.',
           },
           {
             role: 'user',
@@ -66,7 +70,9 @@ export function buildCompactionPrompt(items: AgentInputItem[], maxPromptChars: n
   const body = truncateMiddle(lines.join('\n'), maxPromptChars)
   return [
     'Compact the following earlier session items into a durable summary for a coding agent.',
-    'Do not invent facts. Keep concrete paths, commands, errors, design decisions, and pending tasks.',
+    'This summary will replace the items above as the new leading context. Write it so the agent can continue the work without the original history.',
+    'Cover: user goal, decisions and rationale, modified files (paths), commands and effects, key tool results and errors, current plan, and open risks.',
+    'Do not invent facts. Use concise bullet lists.',
     '',
     body,
   ].join('\n')

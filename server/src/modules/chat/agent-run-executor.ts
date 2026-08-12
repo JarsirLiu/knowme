@@ -6,7 +6,8 @@ import { ApprovalService } from '../approvals/approval.service.js'
 import { ConversationService } from '../conversations/conversation.service.js'
 import { TimelineEventStore } from '../events/timeline-event-store.js'
 import type { Session } from '@openai/agents'
-import { estimateTokens } from '../history/session-compaction.js'
+import { estimateTokens } from '../history/token-estimator.js'
+import { persistCompactionMessage } from '../history/session-compaction.js'
 import { DefaultAgentSessionFactory, type AgentSessionFactory } from '../history/agent-session-store.js'
 import { getToolCallId, persistRunStreamEvent } from './stream-event-mapper.js'
 import { DefaultAgentRuntime, type AgentRuntime, type CodingAgentInstance } from './agent-runtime.js'
@@ -75,6 +76,11 @@ export class AgentRunExecutor {
           keptItems: result.keptItems,
           reason: result.reason,
         }, leaseOwner)
+        if (result.status === 'compacted') {
+          await persistCompactionMessage(sessionId, result).catch((error) => {
+            console.warn('[context-compaction] failed to persist message:', error)
+          })
+        }
       },
       failed: async ({ id, trigger, error }) => {
         await this.emit(conversation.id, runId, 'context_compaction.failed', { id, trigger, error }, leaseOwner)
@@ -94,6 +100,14 @@ export class AgentRunExecutor {
       : ''
     const runInput = loaded instanceof RunState ? loaded : buildEnvironmentContext(project.rootPath) + '\n\n' + skillIndex + skillBlock + cleaned
     await this.emit(conversation.id, runId, resumed ? 'run.resumed' : 'run.started', {}, leaseOwner)
+
+    if (!resumed) {
+      // Auto-compact before the run starts so this turn's input stays within
+      // the token budget. Manual /compact is handled elsewhere; this only fires
+      // when the predicted input crosses the configured threshold.
+      await session.runCompaction()
+    }
+
     let stream: AgentStream | undefined
     try {
       stream = await run(agent, state ?? runInput, {

@@ -1,13 +1,21 @@
 import type { AgentRun, Conversation } from '@prisma/client'
+import type { ConversationRuntimeStatus } from '@cloudagent/core'
 import { prisma } from '../../db/client.js'
 import { appendTimelineEvent } from '../events/timeline-event-store.js'
 import { ConversationHasActiveRunError } from './conversation-errors.js'
-import { titleFromMessage, withRuntimeStatus } from './conversation-domain.js'
+import { ACTIVE_RUN_STATUSES, titleFromMessage, withRuntimeStatus } from './conversation-domain.js'
 import {
   PrismaAgentSessionLifecycleRepository,
   type AgentSessionLifecycleRepository,
 } from '../history/session-lifecycle-repository.js'
 import type { AnyTimelineEvent } from '@cloudagent/core'
+
+export interface ConversationFilter {
+  projectId: string
+  statuses?: Array<Conversation['status']>
+  includeChildren?: boolean
+  runtimeStatuses?: ConversationRuntimeStatus[]
+}
 
 export type TurnCreation = {
   projectId: string
@@ -32,7 +40,7 @@ export type ChildTurnCreation = {
 }
 
 export interface ConversationRepository {
-  list(projectId: string): Promise<Conversation[]>
+  list(filter: ConversationFilter): Promise<Conversation[]>
   get(id: string): Promise<Conversation | null>
   archive(id: string): Promise<Conversation>
   findByClientMessage(projectId: string, clientMessageId: string): Promise<{ conversation: Conversation; run: AgentRun } | null>
@@ -51,9 +59,14 @@ export class PrismaConversationRepository implements ConversationRepository {
     private readonly sessionLifecycleRepository: AgentSessionLifecycleRepository = new PrismaAgentSessionLifecycleRepository(),
   ) {}
 
-  async list(projectId: string) {
-    const conversations = await prisma.conversation.findMany({
-      where: { projectId, status: 'active' },
+  async list(filter: ConversationFilter) {
+    const { projectId, statuses = ['active'], includeChildren = false, runtimeStatuses } = filter
+    const rows = await prisma.conversation.findMany({
+      where: {
+        projectId,
+        status: { in: statuses },
+        ...(includeChildren ? {} : { parentConversationId: null }),
+      },
       orderBy: { updatedAt: 'desc' },
       include: {
         runs: {
@@ -62,7 +75,16 @@ export class PrismaConversationRepository implements ConversationRepository {
         },
       },
     })
-    return conversations.map(({ runs, ...conversation }) => withRuntimeStatus(conversation, runs))
+    const views = rows.map((row) => this.toView(row))
+    return this.filterByRuntimeStatus(views, runtimeStatuses)
+  }
+
+  private filterByRuntimeStatus(
+    views: Array<Conversation & { runtimeStatus: ConversationRuntimeStatus }>,
+    runtimeStatuses?: ConversationRuntimeStatus[],
+  ) {
+    if (!runtimeStatuses || runtimeStatuses.length === 0) return views
+    return views.filter((conversation) => runtimeStatuses.includes(conversation.runtimeStatus))
   }
 
   async get(id: string) {
@@ -76,8 +98,7 @@ export class PrismaConversationRepository implements ConversationRepository {
       },
     })
     if (!conversation) return null
-    const { runs, ...baseConversation } = conversation
-    return withRuntimeStatus(baseConversation, runs)
+    return this.toView(conversation)
   }
 
   async archive(id: string) {
@@ -167,7 +188,7 @@ export class PrismaConversationRepository implements ConversationRepository {
         },
       },
     })
-    return conversations.map(({ runs, ...conversation }) => withRuntimeStatus(conversation, runs))
+    return conversations.map((row) => this.toView(row))
   }
 
   async createInitialTurn(data: TurnCreation) {
@@ -254,7 +275,7 @@ export class PrismaConversationRepository implements ConversationRepository {
 
   async hasActiveRun(conversationId: string) {
     const run = await prisma.agentRun.findFirst({
-      where: { conversationId, status: { in: ['queued', 'running', 'waiting_approval'] } },
+      where: { conversationId, status: { in: ACTIVE_RUN_STATUSES } },
       select: { id: true },
     })
     return Boolean(run)
@@ -272,6 +293,9 @@ export class PrismaConversationRepository implements ConversationRepository {
       await this.sessionLifecycleRepository.touchByConversation(id, tx)
     })
   }
-}
 
-const ACTIVE_RUN_STATUSES = ['queued', 'running', 'waiting_approval']
+  private toView(row: Conversation & { runs: Array<{ status: string }> }) {
+    const { runs, ...conversation } = row
+    return withRuntimeStatus(conversation, runs)
+  }
+}

@@ -7,6 +7,7 @@ import { createDelegateTool, type DelegateHandler } from './tools/delegate-tool.
 import { getInstructions, type AgentType } from './instructions.js'
 import { createSkillTools } from './skills/index.js'
 import { exploreAgentPrompt } from './prompts/templates/explore-agent.js'
+import { ChatCompletionsCompactionFetch } from './context-compaction/compaction-fetch.js'
 
 
 export interface CodingAgent {
@@ -52,7 +53,10 @@ export async function createCodingAgent(
     name: 'cloudagent-compatible',
     baseURL: cfg.baseURL,
     apiKey: cfg.apiKey,
-    fetch: createTimedFetch(cfg.modelTimeoutMs),
+    fetch: new ChatCompletionsCompactionFetch(
+      createTimedFetch(cfg.modelTimeoutMs),
+      cfg.contextCompaction,
+    ).fetch,
   })
 
   const model = aisdk(provider.chatModel(cfg.model))

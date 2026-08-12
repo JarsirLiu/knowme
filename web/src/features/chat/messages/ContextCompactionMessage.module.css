@@ -1,33 +1,82 @@
-.message {
+.container {
   display: flex;
-  align-items: flex-start;
-  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: min(100%, 720px);
-  margin: 8px 0 18px;
-  color: var(--c-muted);
+  margin: 16px 0;
   font-size: 12px;
   line-height: 1.45;
-}
-
-.icon {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  border: 0.5px solid var(--c-border);
-  border-radius: 50%;
   color: var(--c-muted);
-  font-size: 11px;
-  font-weight: 700;
 }
 
-.running .icon { border-color: var(--c-border-strong); }
-.failed { color: var(--c-danger); }
-.failed .icon { border-color: var(--c-danger); color: var(--c-danger); }
-.copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.title { color: var(--c-text); font-weight: 600; }
-.detail { color: var(--c-muted); overflow-wrap: anywhere; }
-.spinner { width: 9px; height: 9px; border: 1.5px solid var(--c-border-strong); border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+.container::before,
+.container::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--c-border);
+  min-width: 24px;
+}
 
-@keyframes spin { to { transform: rotate(360deg); } }
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.detail {
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.failed .label,
+.failed .detail {
+  color: var(--c-danger);
+}
+
+.shimmer {
+  font-size: 12px;
+  font-weight: 500;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: linear-gradient(
+    90deg,
+    #a1a1a1 0%, #a1a1a1 30%,
+    rgba(161, 161, 161, 0.45) 45%, rgba(161, 161, 161, 0.45) 55%,
+    #a1a1a1 70%, #a1a1a1 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: label-shine 2.25s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+}
+
+@keyframes label-shine {
+  0%, 18% { background-position: 100% 0; }
+  82%, 100% { background-position: 0% 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      #a1a1a1 0%, #a1a1a1 30%,
+      rgba(161, 161, 161, 0.45) 45%, rgba(161, 161, 161, 0.45) 55%,
+      #a1a1a1 70%, #a1a1a1 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    -webkit-text-fill-color: var(--c-muted);
+    color: var(--c-muted);
+  }
+}

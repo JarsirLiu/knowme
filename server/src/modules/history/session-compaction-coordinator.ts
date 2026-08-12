@@ -45,20 +45,12 @@ export class SessionCompactionCoordinator {
     }
   }
 
-  async runAutoCompaction(): Promise<null> {
+  // Runs only the compaction lifecycle (started -> completed/failed) and returns
+  // the result. Persisting the compaction message is left to the caller (the
+  // session layer), keeping this coordinator free of storage concerns.
+  async runAutoCompaction(): Promise<SessionCompactionResult | null> {
     if (!this.options) return null
-
-    try {
-      const result = await this.compact('auto')
-      if (result.status === 'compacted') {
-        await this.service.persistCompactionMessage(this.sessionId, result)
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn('[context-compaction] skipped:', message)
-    }
-
-    return null
+    return this.compact('auto')
   }
 }
 

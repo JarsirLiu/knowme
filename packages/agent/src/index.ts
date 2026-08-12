@@ -10,3 +10,4 @@ export { loadSkills, createSkillTools, resolveMentions, extractSkillMentions, SK
 export type { SkillMetadata, SkillFrontmatter, SkillScope } from './skills/index.js'
 export { getInstructions, type AgentType } from './instructions.js'
 export { getExploreAgentPrompt } from './agent.js'
+export type { ContextCompactionOptions, ChatCompletionsRequest, ChatMessage } from './context-compaction/types.js'

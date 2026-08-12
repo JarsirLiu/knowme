@@ -42,6 +42,12 @@ queued -> running -> completed
 模型请求使用 `CLOUDAGENT_MODEL_TIMEOUT_MS` 控制超时，默认 120 秒；超时会进入既有的
 Run 错误收尾路径，不会无限保持 `running`。
 
+Agent package 在 Chat Completions provider 的 fetch 边界提供内部上下文代理。请求估算
+输入超过 `CLOUDAGENT_CONTEXT_COMPACT_TRIGGER_RATIO` 配置的预算后，代理使用同一个
+Chat Completions 端点请求摘要，保留完整的工具调用/工具结果配对，再转发重写后的
+`messages`。模型响应（包括流式响应）不经过代理改写。代理状态只存在于当前 Agent
+实例的请求视图中；Session、RunState 和恢复状态仍由服务端原有持久化链路负责。
+
 ## Coordinator 与 Executor
 
 ### `RunCoordinator`

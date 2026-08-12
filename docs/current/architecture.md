@@ -32,7 +32,10 @@ React Web
 `createCodingAgent` 负责创建模型、Agent、Explorer/Reviewer 子 Agent 和本地
 工具集合。当前模型通过 `@openai/agents-extensions/ai-sdk` 包装 AI SDK 的
 Chat Completions provider，并使用配置的 `baseURL` 连接兼容端点。工具以 workspace
-为安全边界。该包不应该知道 Conversation、AgentRun、SQLite 或 HTTP 请求。
+为安全边界。Chat Completions provider 的 fetch 适配层还可以在请求超过配置阈值时，
+通过同一 Chat Completions 端点请求一个摘要，并只重写发给模型的 messages；模型响应
+和流式响应仍由上游原样返回。这个代理只拥有请求级上下文视图，不负责 Conversation、
+AgentRun、SQLite 或 Timeline 持久化，因此不能替代 Run checkpoint 的状态管理。
 
 ### Skill 系统（`packages/agent/src/skills/`）
 

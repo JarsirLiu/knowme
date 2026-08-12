@@ -1,6 +1,10 @@
 import type { AgentInputItem } from '@openai/agents'
 import { randomUUID } from 'node:crypto'
 
+import { estimateTokens } from './token-estimator.js'
+
+export { estimateTokens } from './token-estimator.js'
+
 export type SessionCompactionTrigger = 'auto' | 'manual'
 
 export interface CompactionPolicyOptions {
@@ -79,7 +83,43 @@ export function shouldCompact(input: {
   return { shouldCompact: true }
 }
 
-export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number) {
+export interface CompactionSelection {
+  compactedItems: AgentInputItem[]
+  keptItems: AgentInputItem[]
+  /** Compatibility fields for callers using the original tail-selection shape. */
+  startIndex: number
+  recentItems: AgentInputItem[]
+  recentTokens: number
+}
+
+/**
+ * Manual compaction (e.g. `/compact`): summarize the entire conversation and
+ * keep nothing verbatim. This matches the codex/OpenAI style where compaction
+ * produces a standalone summary message and every later turn, token count, and
+ * further compaction starts from that summary. It also avoids preserving a
+ * near-threshold "last turn" verbatim, which would defeat the purpose.
+ *
+ * Returns undefined when there is no history worth summarizing.
+ */
+export function selectManualCompactionRange(items: AgentInputItem[]): CompactionSelection | undefined {
+  if (items.length === 0) return undefined
+  return {
+    compactedItems: items,
+    keptItems: [],
+    startIndex: 0,
+    recentItems: [],
+    recentTokens: 0,
+  }
+}
+
+/**
+ * Automatic compaction: keep the most recent turns that fit within
+ * `keepRecentTokens` verbatim, and summarize everything before them.
+ *
+ * Returns undefined when no complete historical turn fits the recent budget
+ * (e.g. a single turn already exceeds the budget).
+ */
+export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: number): CompactionSelection | undefined {
   const userStarts = items.flatMap((item, index) => isUserMessage(item) ? [index] : [])
   if (userStarts.length === 0) return undefined
 
@@ -96,6 +136,8 @@ export function selectRecentTail(items: AgentInputItem[], keepRecentTokens: numb
 
   if (startIndex === items.length || startIndex === 0) return undefined
   return {
+    compactedItems: items.slice(0, startIndex),
+    keptItems: items.slice(startIndex),
     startIndex,
     recentItems: items.slice(startIndex),
     recentTokens,
@@ -128,20 +170,6 @@ export function createSummaryItem(
       },
     },
   } as unknown as AgentInputItem
-}
-
-export function estimateTokens(value: unknown): number {
-  const text = typeof value === 'string' ? value : stringify(value)
-  let tokens = 0
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0
-    if (code <= 0x7f) tokens += /[\s]/u.test(character) ? 0.25 : 0.34
-    else if (code >= 0x2e80 && code <= 0x9fff) tokens += 0.75
-    else if (code >= 0xf900 && code <= 0xfaff) tokens += 0.75
-    else if (code >= 0x20000 && code <= 0x3134f) tokens += 0.75
-    else tokens += 0.75
-  }
-  return Math.max(1, Math.ceil(tokens))
 }
 
 export function isReasoningItem(item: AgentInputItem): boolean {
@@ -182,12 +210,4 @@ export function skipped(
 function isUserMessage(item: AgentInputItem): boolean {
   const record = item as Record<string, unknown>
   return record.type === 'message' && record.role === 'user'
-}
-
-function stringify(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? ''
-  } catch {
-    return String(value)
-  }
 }

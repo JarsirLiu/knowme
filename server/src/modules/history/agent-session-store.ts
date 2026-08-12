@@ -66,13 +66,14 @@ export class PrismaAgentSession implements Session {
     return this.compactionCoordinator.compact(trigger)
   }
 
-  async runCompaction(): Promise<null> {
+  async runCompaction(): Promise<SessionCompactionResult | null> {
     return this.compactionCoordinator.runAutoCompaction()
   }
 }
 
 export type CompactionSession = Session & {
   compact(trigger: SessionCompactionTrigger): Promise<SessionCompactionResult>
+  runCompaction(): Promise<SessionCompactionResult | null>
 }
 
 export interface AgentSessionFactory {
